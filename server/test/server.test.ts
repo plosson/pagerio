@@ -11,14 +11,14 @@ async function waitFor(check: () => boolean, ms = 2000): Promise<void> {
   }
 }
 
-function boot(databasePath: string, sender: FakeSender) {
+function boot(databasePath: string, sender: FakeSender, shutdownTimeoutMs = 50) {
   const config = testConfig({ databasePath, port: 0 });
   const running = startServer(config, {
     sender,
     google: fakeGoogleVerifier,
     googleOAuth: fakeGoogleOAuth,
     logger: createLogger(() => {}),
-    shutdownTimeoutMs: 50,
+    shutdownTimeoutMs,
   });
   return { running, ctx: { db: running.db, config, now: Date.now } };
 }
@@ -67,5 +67,47 @@ describe("startServer", () => {
     } finally {
       await second.running.stop();
     }
+  });
+
+  test("stop() force-closes a request that never finishes within shutdownTimeoutMs and frees the port", async () => {
+    const timeoutMs = 200;
+    const { running, ctx } = boot(tempDbPath(), new FakeSender(), timeoutMs);
+    const { triggerToken } = seedAccount(ctx);
+    const body = new ReadableStream<Uint8Array>({ start() {} }); // never enqueues, never closes
+    const hanging = fetch(`${running.url}/p/${triggerToken}`, { method: "POST", body, duplex: "half" } as RequestInit).catch(
+      () => "aborted",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const started = Date.now();
+    await running.stop();
+    expect(Date.now() - started).toBeLessThan(timeoutMs + 500);
+    await hanging;
+    let refused = false;
+    await fetch(`${running.url}/healthz`).catch(() => {
+      refused = true;
+    });
+    expect(refused).toBe(true);
+  });
+
+  test("stop() uses ONE deadline: a hung request plus a stuck in-flight send still finish within shutdownTimeoutMs", async () => {
+    const timeoutMs = 300;
+    const stuck = new FakeSender();
+    stuck.handler = () => new Promise(() => {});
+    const { running, ctx } = boot(tempDbPath(), stuck, timeoutMs);
+    const { account, triggerToken } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    expect((await fetch(`${running.url}/p/${triggerToken}`, { method: "POST" })).status).toBe(202);
+    await waitFor(() => stuck.calls.length === 1);
+    const body = new ReadableStream<Uint8Array>({ start() {} });
+    const hanging = fetch(`${running.url}/p/${triggerToken}`, { method: "POST", body, duplex: "half" } as RequestInit).catch(
+      () => "aborted",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const started = Date.now();
+    await running.stop();
+    const elapsed = Date.now() - started;
+    await hanging;
+    // Two sequential waits would take ~2 * timeoutMs (600 ms); one deadline stays near timeoutMs.
+    expect(elapsed).toBeLessThan(timeoutMs + 200);
   });
 });

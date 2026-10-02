@@ -58,22 +58,34 @@ export function startServer(
   const shutdownTimeoutMs = overrides.shutdownTimeoutMs ?? 5_000;
   let stopping: Promise<void> | null = null;
   const shutdown = async (): Promise<void> => {
-    // Without `true`, in-flight requests finish; wait for them, then force-close.
+    // One overall deadline: the graceful HTTP wait and the worker drain share it.
+    const deadline = Date.now() + shutdownTimeoutMs;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      // Without `true`, in-flight requests finish; wait for them until the deadline.
       await Promise.race([
         Promise.resolve(server.stop()),
         new Promise<void>((resolve) => {
-          timer = setTimeout(resolve, shutdownTimeoutMs);
+          timer = setTimeout(resolve, Math.max(0, deadline - Date.now()));
         }),
       ]);
     } finally {
       clearTimeout(timer);
+      // Cleanup always runs, even if the graceful stop threw; a thrown error is rethrown after.
+      try {
+        await server.stop(true);
+      } finally {
+        try {
+          await worker.stop(Math.max(0, deadline - Date.now()));
+        } finally {
+          try {
+            sender.close();
+          } finally {
+            db.close();
+          }
+        }
+      }
     }
-    await server.stop(true);
-    await worker.stop(shutdownTimeoutMs);
-    sender.close();
-    db.close();
   };
 
   return {
