@@ -59,12 +59,17 @@ targets:
       - Shared
     dependencies:
       - package: PagerKit
+      - package: GoogleSignIn
     info:
       path: MacApp/Info.plist
       properties:
         CFBundleDisplayName: Pocket Pager
         LSUIElement: true
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
+        GIDClientID: $(GOOGLE_CLIENT_ID_MACOS)
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID_MACOS)]
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: MacApp/PocketPager-macOS.entitlements
       properties:
@@ -72,6 +77,9 @@ targets:
         com.apple.developer.usernotifications.time-sensitive: true
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.chuut.pagerio.mac
+          - $(AppIdentifierPrefix)com.google.GIDSignIn
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chuut.pagerio.mac
