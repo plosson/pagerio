@@ -31,6 +31,16 @@ describe("GET /v/:publicId", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
+  test("an empty title falls back to the message in the h1 and the message is not repeated", async () => {
+    const t = testApp();
+    const { page } = makePage(t, { title: "", message: "EMPTY-TITLE-MSG" });
+    const html = await (await t.app.request(`/v/${page.public_id}`)).text();
+    expect(html).toContain("<h1>EMPTY-TITLE-MSG</h1>");
+    expect(html).not.toContain('<p class="message">');
+    expect(html).not.toContain("<h1></h1>");
+    expect(html).toContain("<title>Pocket Pager</title>");
+  });
+
   test("escapes hostile titles and messages", async () => {
     const t = testApp();
     const { page } = makePage(t, { title: '<img src=x onerror="alert(1)">', message: "<script>alert(2)</script>" });

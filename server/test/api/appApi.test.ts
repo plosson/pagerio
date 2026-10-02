@@ -155,7 +155,7 @@ describe("GET /api/pages", () => {
     const token = await signIn(t.app);
     const other = seedAccount(t.ctx, "other");
     const foreign = addPage(t, other.account.id, "x");
-    for (const query of ["?limit=0", "?limit=101", "?limit=abc", "?limit=1.5", `?before=${foreign.id}`, "?before=pg_missing"]) {
+    for (const query of ["?limit=0", "?limit=101", "?limit=abc", "?limit=1.5", "?limit=1e1", "?limit=0x10", "?limit=%205%20", "?limit=", "?limit=-5", "?limit=%2B5", "?limit=5.0", `?before=${foreign.id}`, "?before=pg_missing"]) {
       expect((await t.app.request(`/api/pages${query}`, authed(token))).status).toBe(400);
     }
   });

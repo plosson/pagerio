@@ -28,8 +28,12 @@ export class FixedWindowLimiter {
 }
 
 /**
- * Traefik (siteio) appends the connecting address to X-Forwarded-For, so only the
- * rightmost entry is trustworthy; anything to its left is client-controlled.
+ * The server runs behind Cloudflare and Traefik (siteio). Each proxy appends the address
+ * it saw to X-Forwarded-For, so only the rightmost entry (added by our own proxy) is
+ * trustworthy; anything to its left is client-controlled. When traffic is proxied, that
+ * address is the Cloudflare edge, not the end client, so it identifies an edge node and
+ * is too coarse to rate-limit real users. The limiter is therefore only used for
+ * unknown-token requests (see trigger.ts).
  */
 export function clientIp(c: Context): string {
   const entries = (c.req.header("x-forwarded-for") ?? "")

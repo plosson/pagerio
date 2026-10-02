@@ -26,6 +26,8 @@ export interface WorkerOptions {
 export class DeliveryWorker {
   private readonly inFlight = new Set<Promise<void>>();
   private timer: ReturnType<typeof setInterval> | null = null;
+  private stopTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
 
   constructor(
     private readonly deps: WorkerDeps,
@@ -38,6 +40,7 @@ export class DeliveryWorker {
 
   /** Claims due jobs and starts sending them. Returns how many were claimed. */
   tick(): number {
+    if (this.stopped) return 0;
     const capacity = (this.options.maxInFlight ?? 100) - this.inFlight.size;
     if (capacity <= 0) return 0;
     let jobs: ReturnType<typeof claimDueJobs>;
@@ -68,10 +71,12 @@ export class DeliveryWorker {
   }
 
   wake(): void {
+    if (this.stopped) return;
     queueMicrotask(() => this.tick());
   }
 
   start(): void {
+    if (this.timer || this.stopped) return;
     const recovered = this.recover();
     if (recovered > 0) this.deps.logger.info("delivery_recovered", { jobs: recovered });
     this.timer = setInterval(() => this.tick(), this.options.intervalMs ?? 500);
@@ -79,9 +84,20 @@ export class DeliveryWorker {
   }
 
   async stop(timeoutMs = 5_000): Promise<void> {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
-    await Promise.race([this.idle(), new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+    try {
+      await Promise.race([
+        this.idle(),
+        new Promise((resolve) => {
+          this.stopTimer = setTimeout(resolve, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (this.stopTimer) clearTimeout(this.stopTimer);
+      this.stopTimer = null;
+    }
   }
 
   private async deliver(jobId: string): Promise<void> {

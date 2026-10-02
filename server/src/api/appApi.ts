@@ -65,7 +65,7 @@ export function appApiRoutes(deps: AppDeps): Hono<Env> {
 
   api.get("/pages", (c) => {
     const rawLimit = c.req.query("limit");
-    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+    const limit = rawLimit === undefined ? 50 : /^\d+$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
       return errorJson(c, 400, "invalid_input", "limit must be an integer from 1 to 100.");
     }

@@ -35,7 +35,7 @@ describe("POST /p/:token", () => {
       body: JSON.stringify({ title: "Build", message: "Done", details: "**ok**", url: "https://e.com", group: "ci" }),
     });
     const { id } = (await res.json()) as { id: string };
-    expect(getPageById(t.ctx.db, id)).toMatchObject({ title: "Build", message: "Done", details: "**ok**", url: "https://e.com", group_key: "ci", source: "trigger" });
+    expect(getPageById(t.ctx.db, id)).toMatchObject({ title: "Build", message: "Done", details: "**ok**", url: "https://e.com/", group_key: "ci", source: "trigger" });
   });
 
   test("unknown and dead tokens get the exact same 404", async () => {

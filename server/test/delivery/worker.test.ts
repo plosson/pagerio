@@ -275,6 +275,95 @@ describe("DeliveryWorker", () => {
     expect(logs.join("\n")).not.toContain("TOP-SECRET");
   });
 
+  test("a stale in-flight result cannot overwrite a job that recover() reset to pending", async () => {
+    const ctx = testCtx();
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    page(ctx, account.id);
+    const old = setup(ctx);
+    let release: () => void = () => {};
+    old.sender.handler = () => new Promise((resolve) => (release = () => resolve({ kind: "ok", apnsId: "stale" })));
+    old.worker.tick();
+    expect(jobs(ctx)[0]!.status).toBe("sending");
+
+    const next = setup(ctx);
+    expect(next.worker.recover()).toBe(1);
+    expect(jobs(ctx)[0]!.status).toBe("pending");
+
+    release();
+    await old.worker.idle();
+    expect(jobs(ctx)[0]).toMatchObject({ status: "pending", apns_id: null });
+  });
+
+  test("stale failures and retries do not touch a reset job either", async () => {
+    for (const result of [{ kind: "fail", reason: "X" }, { kind: "retry", reason: "Y" }] as const) {
+      const ctx = testCtx();
+      const { account } = seedAccount(ctx);
+      seedDevice(ctx, account.id);
+      page(ctx, account.id);
+      const old = setup(ctx);
+      let release: () => void = () => {};
+      old.sender.handler = () => new Promise((resolve) => (release = () => resolve(result)));
+      old.worker.tick();
+      setup(ctx).worker.recover();
+      release();
+      await old.worker.idle();
+      expect(jobs(ctx)[0]).toMatchObject({ status: "pending", attempts: 0, last_error: null });
+    }
+  });
+
+  test("after stop(), wake() claims nothing", async () => {
+    const { ctx, sender, worker } = setup();
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    page(ctx, account.id);
+    await worker.stop();
+    worker.wake();
+    await flush();
+    await worker.idle();
+    expect(sender.calls).toHaveLength(0);
+    expect(jobs(ctx)[0]!.status).toBe("pending");
+  });
+
+  test("the interval keeps no life after stop(): new jobs are never claimed", async () => {
+    const { ctx, sender, worker } = setup(testCtx(), { intervalMs: 5 });
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    worker.start();
+    await worker.stop();
+    page(ctx, account.id);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(sender.calls).toHaveLength(0);
+  });
+
+  test("start() twice does not create a second interval", async () => {
+    const { ctx, worker } = setup(testCtx(), { intervalMs: 5 });
+    const calls: number[] = [];
+    const original = worker.tick.bind(worker);
+    worker.tick = () => {
+      calls.push(1);
+      return original();
+    };
+    worker.start();
+    worker.start();
+    // each start() would run one immediate tick; a second is a no-op
+    expect(calls).toHaveLength(1);
+    await worker.stop();
+    expect(ctx.db).toBeDefined();
+    const after = calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(calls).toHaveLength(after);
+  });
+
+  test("stop() returns promptly when idle and does not leave its timeout timer pending", async () => {
+    const { worker } = setup();
+    const started = performance.now();
+    await worker.stop(10_000);
+    expect(performance.now() - started).toBeLessThan(500);
+    // @ts-expect-error private field inspected on purpose
+    expect(worker.stopTimer).toBeNull();
+  });
+
   test("two workers on one database never claim the same job", () => {
     const ctx = testCtx();
     const { account } = seedAccount(ctx);

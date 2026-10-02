@@ -37,6 +37,14 @@ describe("parseDeviceInput", () => {
 });
 
 describe("registerCurrentDevice", () => {
+  test("refuses a web session: devices belong to app sessions only", () => {
+    const ctx = testCtx();
+    const { account } = seedAccount(ctx);
+    const { session } = createSession(ctx, account.id, "web");
+    expect(() => registerCurrentDevice(ctx, session, input())).toThrow();
+    expect(listDevicesForAccount(ctx.db, account.id)).toHaveLength(0);
+  });
+
   test("first registration creates a device and links it to the session", () => {
     const ctx = testCtx();
     const { account } = seedAccount(ctx);

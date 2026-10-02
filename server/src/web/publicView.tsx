@@ -9,12 +9,12 @@ import { renderMarkdown } from "./markdown";
 function PageView({ page }: { page: PageRow }) {
   const created = new Date(page.created_at).toISOString();
   return (
-    <Layout title={page.title ?? "Pocket Pager"}>
+    <Layout title={page.title || "Pocket Pager"}>
       <article class="page">
         <p class="muted">
           <time datetime={created}>{created}</time>
         </p>
-        <h1>{page.title ?? page.message}</h1>
+        <h1>{page.title || page.message}</h1>
         {page.title && <p class="message">{page.message}</p>}
         {page.details && <div class="details">{raw(renderMarkdown(page.details))}</div>}
         {page.url && (

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Hono } from "hono";
 import { getAccountByGoogleSub } from "../../src/db/accounts";
 import { triggerUrl } from "../../src/services/accounts";
+import { createPage } from "../../src/services/pages";
 import { createSession } from "../../src/services/sessions";
 import { CSP } from "../../src/web/http";
 import { seedAccount, testApp } from "../helpers";
@@ -164,5 +165,22 @@ describe("recent pages", () => {
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("someone else");
     expect(html).toMatch(/href="https:\/\/pager\.test\/v\/[A-Za-z0-9_-]{43}"/);
+  });
+
+  test("a page with an empty title shows its message as the link text, without a dangling dash", async () => {
+    const t = testApp();
+    const { session } = await signIn(t.app);
+    const mine = getAccountByGoogleSub(t.ctx.db, "user1")!;
+    const r = createPage(t.ctx, {
+      accountId: mine.id,
+      input: { title: "", message: "EMPTY-TITLE-MSG", details: null, url: null, group: null },
+      source: "trigger",
+      idempotencyKey: null,
+    });
+    if (!r.ok) throw new Error("rate limited");
+    const html = await (await home(t.app, session!)).text();
+    expect(html).toContain("<strong>EMPTY-TITLE-MSG</strong>");
+    expect(html).not.toContain("<strong></strong>");
+    expect(html).not.toContain("— EMPTY-TITLE-MSG");
   });
 });

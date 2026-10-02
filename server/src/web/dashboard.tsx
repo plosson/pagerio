@@ -87,7 +87,7 @@ function Dashboard(props: {
               return (
                 <li>
                   <a href={props.viewUrlFor(page.public_id)}>
-                    <strong>{page.title ?? page.message}</strong>
+                    <strong>{page.title || page.message}</strong>
                     {page.title && <span class="muted"> — {page.message}</span>}
                   </a>
                   <time datetime={created}>{created}</time>

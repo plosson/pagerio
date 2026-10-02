@@ -10,6 +10,8 @@ export function createGoogleOAuthClient(opts: {
   clientSecret: string;
   redirectUri: string;
   fetchFn?: typeof fetch;
+  /** Token endpoint timeout; defaults to 10 seconds. */
+  timeoutMs?: number;
 }): GoogleOAuthClient {
   const fetchFn = opts.fetchFn ?? fetch;
   return {
@@ -38,6 +40,7 @@ export function createGoogleOAuthClient(opts: {
             redirect_uri: opts.redirectUri,
             grant_type: "authorization_code",
           }).toString(),
+          signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
         });
         if (!res.ok) throw new AuthError("code_exchange_failed");
         const parsed = await res.json();

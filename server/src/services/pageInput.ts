@@ -43,7 +43,8 @@ function urlField(source: Record<string, unknown>): Field {
     return { ok: false, message: "url must be an absolute http(s) URL." };
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return { ok: false, message: "url must be an absolute http(s) URL." };
-  return { ok: true, value: field.value };
+  if (codePoints(parsed.href) > LIMITS.url) return { ok: false, message: `url must be at most ${LIMITS.url} characters.` };
+  return { ok: true, value: parsed.href };
 }
 
 export function parseTriggerBody(contentType: string | undefined, body: Uint8Array): ParseResult {

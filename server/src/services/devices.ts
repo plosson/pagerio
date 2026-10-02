@@ -29,6 +29,7 @@ export function parseDeviceInput(body: unknown): { ok: true; value: DeviceInput 
 }
 
 export function registerCurrentDevice(ctx: Ctx, session: SessionRow, input: DeviceInput): DeviceRow {
+  if (session.kind !== "app") throw new Error("devices belong to app sessions only");
   return ctx.db.transaction(() => {
     const now = ctx.now();
     const current = session.device_id ? getDevice(ctx.db, session.device_id) : null;

@@ -39,6 +39,18 @@ describe("JSON bodies", () => {
     });
   });
 
+  test("urls are stored normalized", () => {
+    expect(json({ url: "https://Example.com" })).toMatchObject({ ok: true, value: { url: "https://example.com/" } });
+    expect(json({ url: "http:example.com" })).toMatchObject({ ok: true, value: { url: "http://example.com/" } });
+    expect(json({ url: " HTTPS://E.com/a b " })).toMatchObject({ ok: true, value: { url: "https://e.com/a%20b" } });
+  });
+
+  test("rejects a url whose normalized form exceeds 2,048 characters", () => {
+    // 700 spaces fit in the raw limit but each becomes %20 once normalized.
+    expect(json({ url: "https://e.com/" + " ".repeat(700) + "a".repeat(10) }).ok).toBe(false);
+    expect(json({ url: "https://e.com/" + "\u00e9".repeat(700) }).ok).toBe(false);
+  });
+
   test("content type matching ignores case and parameters", () => {
     expect(parseTriggerBody("Application/JSON; charset=utf-8", enc('{"message":"hi"}'))).toEqual({ ok: true, value: { ...empty, message: "hi" } });
   });

@@ -67,7 +67,7 @@ export function getDeliveryContext(db: Database, jobId: string): DeliveryContext
 }
 
 export function markSubmitted(db: Database, id: string, apnsId: string, at: number): void {
-  db.query("UPDATE delivery_jobs SET status = 'submitted', apns_id = $apnsId, last_error = NULL, updated_at = $at WHERE id = $id").run({
+  db.query("UPDATE delivery_jobs SET status = 'submitted', apns_id = $apnsId, last_error = NULL, updated_at = $at WHERE id = $id AND status = 'sending'").run({
     id,
     apnsId,
     at,
@@ -75,13 +75,13 @@ export function markSubmitted(db: Database, id: string, apnsId: string, at: numb
 }
 
 export function markFailed(db: Database, id: string, reason: string, at: number): void {
-  db.query("UPDATE delivery_jobs SET status = 'failed', last_error = $reason, updated_at = $at WHERE id = $id").run({ id, reason, at });
+  db.query("UPDATE delivery_jobs SET status = 'failed', last_error = $reason, updated_at = $at WHERE id = $id AND status = 'sending'").run({ id, reason, at });
 }
 
 export function scheduleRetry(db: Database, id: string, attempts: number, nextAt: number, reason: string, at: number): void {
   db.query(
     `UPDATE delivery_jobs SET status = 'pending', attempts = $attempts, next_attempt_at = $nextAt,
-       last_error = $reason, updated_at = $at WHERE id = $id`,
+       last_error = $reason, updated_at = $at WHERE id = $id AND status = 'sending'`,
   ).run({ id, attempts, nextAt, reason, at });
 }
 

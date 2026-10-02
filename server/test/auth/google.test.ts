@@ -51,6 +51,17 @@ describe("createGoogleVerifier", () => {
   }
 });
 
+describe("createGoogleVerifier construction", () => {
+  test("fails closed on an empty audience list", () => {
+    expect(() => createGoogleVerifier([])).toThrow();
+  });
+  for (const bad of ["", "   ", "\t\n"]) {
+    test(`fails closed on an audience of ${JSON.stringify(bad)}`, () => {
+      expect(() => createGoogleVerifier(["web-client", bad])).toThrow();
+    });
+  }
+});
+
 describe("createGoogleOAuthClient", () => {
   const base = { clientId: "web-client", clientSecret: "shh", redirectUri: "https://pager.test/auth/google/callback" };
 
@@ -91,6 +102,25 @@ describe("createGoogleOAuthClient", () => {
       await expect(client.exchangeCode("c")).rejects.toBeInstanceOf(AuthError);
     });
   }
+
+  test("a token endpoint that never answers is aborted and surfaces as AuthError", async () => {
+    let aborted = false;
+    const client = createGoogleOAuthClient({
+      ...base,
+      timeoutMs: 50,
+      fetchFn: ((_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        })) as unknown as typeof fetch,
+    });
+    const err = await client.exchangeCode("c").catch((e) => e);
+    expect(err).toBeInstanceOf(AuthError);
+    expect(err.message).toBe("code_exchange_failed");
+    expect(aborted).toBe(true);
+  });
 
   test("throws AuthError when the network fails", async () => {
     const client = createGoogleOAuthClient({

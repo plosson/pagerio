@@ -40,6 +40,15 @@ describe("startServer", () => {
     }
   });
 
+  test("stop() is idempotent: a second call resolves to the same promise without throwing", async () => {
+    const { running } = boot(tempDbPath(), new FakeSender());
+    const first = running.stop();
+    const second = running.stop();
+    expect(second).toBe(first);
+    await Promise.all([first, second]);
+    await running.stop();
+  });
+
   test("a page accepted just before a restart is delivered by the next process", async () => {
     const path = tempDbPath();
     const stuck = new FakeSender();

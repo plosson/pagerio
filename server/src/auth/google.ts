@@ -14,6 +14,10 @@ export function createGoogleVerifier(
   audiences: string[],
   keys: JWTVerifyGetKey = createRemoteJWKSet(GOOGLE_JWKS_URL),
 ): GoogleVerifier {
+  // Fail closed: jose treats an empty audience list as "no audience check".
+  if (audiences.length === 0 || audiences.some((aud) => aud.trim() === "")) {
+    throw new Error("createGoogleVerifier requires at least one non-empty audience");
+  }
   return {
     async verify(idToken) {
       let payload: Record<string, unknown>;

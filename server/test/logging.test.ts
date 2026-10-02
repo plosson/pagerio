@@ -21,6 +21,17 @@ describe("createLogger", () => {
     expect(entry).toMatchObject({ level: "error", event: "boom", code: 7 });
     expect(typeof entry.time).toBe("string");
   });
+
+  test("caller fields can never overwrite time, level or event", () => {
+    const lines: string[] = [];
+    createLogger((l) => lines.push(l)).info("real_event", { time: "forged", level: "error", event: "forged_event", other: 1 } as never);
+    const entry = JSON.parse(lines[0]!);
+    expect(entry.event).toBe("real_event");
+    expect(entry.level).toBe("info");
+    expect(entry.time).not.toBe("forged");
+    expect(Number.isNaN(Date.parse(entry.time))).toBe(false);
+    expect(entry.other).toBe(1);
+  });
 });
 
 describe("requestLogger", () => {

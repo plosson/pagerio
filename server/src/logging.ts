@@ -9,7 +9,7 @@ export interface Logger {
 
 export function createLogger(sink: (line: string) => void = (line) => console.log(line)): Logger {
   const write = (level: "info" | "error", event: string, fields: LogFields = {}) =>
-    sink(JSON.stringify({ time: new Date().toISOString(), level, event, ...fields }));
+    sink(JSON.stringify({ ...fields, time: new Date().toISOString(), level, event }));
   return {
     info: (event, fields) => write("info", event, fields),
     error: (event, fields) => write("error", event, fields),

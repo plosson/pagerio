@@ -55,14 +55,33 @@ export function startServer(
   const server = Bun.serve({ port: config.port, fetch: app.fetch, maxRequestBodySize: MAX_REQUEST_BODY_BYTES });
   logger.info("server_started", { port: server.port ?? 0 });
 
+  const shutdownTimeoutMs = overrides.shutdownTimeoutMs ?? 5_000;
+  let stopping: Promise<void> | null = null;
+  const shutdown = async (): Promise<void> => {
+    // Without `true`, in-flight requests finish; wait for them, then force-close.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        Promise.resolve(server.stop()),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, shutdownTimeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    await server.stop(true);
+    await worker.stop(shutdownTimeoutMs);
+    sender.close();
+    db.close();
+  };
+
   return {
     url: `http://localhost:${server.port}`,
     db,
-    async stop() {
-      server.stop(true);
-      await worker.stop(overrides.shutdownTimeoutMs);
-      sender.close();
-      db.close();
+    stop() {
+      stopping ??= shutdown();
+      return stopping;
     },
   };
 }
