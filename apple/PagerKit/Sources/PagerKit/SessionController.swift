@@ -17,8 +17,14 @@ public final class SessionController {
 
     public func completeSignIn(idToken: String, api: APIClient) async throws {
         let auth = try await api.exchangeGoogleToken(idToken)
-        store.write(Self.tokenKey, auth.sessionToken)
-        store.write(Self.emailKey, auth.email)
+        do {
+            try store.write(Self.tokenKey, auth.sessionToken)
+            try store.write(Self.emailKey, auth.email)
+        } catch {
+            try? store.write(Self.tokenKey, nil)
+            try? store.write(Self.emailKey, nil)
+            throw error
+        }
         email = auth.email
         isSignedIn = true
     }
@@ -30,8 +36,8 @@ public final class SessionController {
     }
 
     public func clear() {
-        store.write(Self.tokenKey, nil)
-        store.write(Self.emailKey, nil)
+        try? store.write(Self.tokenKey, nil)
+        try? store.write(Self.emailKey, nil)
         email = nil
         isSignedIn = false
     }

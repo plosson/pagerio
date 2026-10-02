@@ -40,5 +40,18 @@ extension Network {
             #expect(session.email == nil)
             #expect(store.read(SessionController.tokenKey) == nil)
         }
+
+        @Test func aKeychainWriteFailureLeavesYouSignedOut() async {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, #"{"session_token":"s1","email":"a@example.com"}"#) }
+            let session = SessionController(store: FailingSecretStore())
+            await #expect(throws: SecretStoreError.self) { try await session.completeSignIn(idToken: "g", api: api) }
+            #expect(!session.isSignedIn)
+            #expect(session.email == nil)
+        }
     }
+}
+
+struct FailingSecretStore: SecretStore {
+    func read(_ key: String) -> String? { nil }
+    func write(_ key: String, _ value: String?) throws { throw SecretStoreError(status: -34018) }
 }

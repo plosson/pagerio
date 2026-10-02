@@ -3,7 +3,15 @@ import Security
 
 public protocol SecretStore: Sendable {
     func read(_ key: String) -> String?
-    func write(_ key: String, _ value: String?)
+    func write(_ key: String, _ value: String?) throws
+}
+
+public struct SecretStoreError: Error, Equatable {
+    public let status: Int32
+
+    public init(status: Int32) {
+        self.status = status
+    }
 }
 
 /// Generic-password items in the data-protection keychain, readable after first unlock
@@ -24,13 +32,15 @@ public final class KeychainStore: SecretStore {
         return String(data: data, encoding: .utf8)
     }
 
-    public func write(_ key: String, _ value: String?) {
-        SecItemDelete(baseQuery(key) as CFDictionary)
+    public func write(_ key: String, _ value: String?) throws {
+        let deleted = SecItemDelete(baseQuery(key) as CFDictionary)
+        guard deleted == errSecSuccess || deleted == errSecItemNotFound else { throw SecretStoreError(status: deleted) }
         guard let value else { return }
         var query = baseQuery(key)
         query[kSecValueData as String] = Data(value.utf8)
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
+        let added = SecItemAdd(query as CFDictionary, nil)
+        guard added == errSecSuccess else { throw SecretStoreError(status: added) }
     }
 
     private func baseQuery(_ key: String) -> [String: Any] {
@@ -55,7 +65,7 @@ public final class InMemorySecretStore: SecretStore, @unchecked Sendable {
         lock.withLock { values[key] }
     }
 
-    public func write(_ key: String, _ value: String?) {
+    public func write(_ key: String, _ value: String?) throws {
         lock.withLock { values[key] = value }
     }
 }
