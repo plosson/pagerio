@@ -51,12 +51,72 @@ describe("POST /p/:token", () => {
     expect(JSON.parse(bodies[0]!)).toEqual({ error: { code: "not_found", message: "Unknown pager URL." } });
   });
 
-  test("GET (link previews, scanners) never creates a page", async () => {
+  test("GET (link previews, scanners) never creates a page and returns the Markdown guide with the URL", async () => {
     const t = testApp();
     const { triggerToken } = seedAccount(t.ctx);
     const res = await t.app.request(`/p/${triggerToken}`);
-    expect(res.status).toBe(405);
-    expect(res.headers.get("allow")).toBe("POST");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    const text = await res.text();
+    expect(text).toStartWith("# ");
+    expect(text).toContain(`curl -X POST https://pager.test/p/${triggerToken}`);
+    expect(pageCount(t)).toBe(0);
+    expect(t.wakes.count).toBe(0);
+  });
+
+  test("GET gives the same guide for live, dead and unknown tokens, so it cannot be used to probe tokens", async () => {
+    const t = testApp();
+    const { account, triggerToken } = seedAccount(t.ctx);
+    const unknown = "Z".repeat(16);
+    const live = await (await t.app.request(`/p/${triggerToken}`)).text();
+    t.ctx.db.query("DELETE FROM accounts WHERE id = $id").run({ id: account.id });
+    const dead = await (await t.app.request(`/p/${triggerToken}`)).text();
+    const other = await (await t.app.request(`/p/${unknown}`)).text();
+    expect(dead).toBe(live);
+    expect(other).toBe(live.replaceAll(triggerToken, unknown));
+  });
+
+  test("GET does not echo a token that is not token-shaped", async () => {
+    const t = testApp();
+    const res = await t.app.request(`/p/${encodeURIComponent("evil](https://attacker.test)<script>")}`);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain("attacker");
+    expect(text).not.toContain("<script>");
+    expect(text).toContain("https://pager.test/p/<token>");
+  });
+
+  test("GET is not counted against the per-IP limit for unknown tokens", async () => {
+    const t = testApp();
+    const { triggerToken } = seedAccount(t.ctx);
+    for (let i = 0; i < 50; i++) {
+      const res = await t.app.request(`/p/${"Q".repeat(16)}`, { headers: { "x-forwarded-for": "203.0.113.9" } });
+      expect(res.status).toBe(200);
+    }
+    expect((await post(t.app, triggerToken, { ip: "203.0.113.9" })).status).toBe(202);
+    expect((await post(t.app, "Q".repeat(16), { ip: "203.0.113.9" })).status).toBe(404);
+  });
+
+  test("every JSON example in the guide is valid JSON that the endpoint accepts", async () => {
+    const t = testApp();
+    const { triggerToken } = seedAccount(t.ctx);
+    const text = await (await t.app.request(`/p/${triggerToken}`)).text();
+    const bodies = [...text.matchAll(/-H "Content-Type: application\/json" \\\n\s+-d '([^']+)'/g)].map((m) => m[1]!);
+    expect(bodies.length).toBeGreaterThanOrEqual(4);
+    for (const body of bodies) {
+      const res = await post(t.app, triggerToken, { headers: { "content-type": "application/json" }, body });
+      expect(res.status).toBe(202);
+    }
+  });
+
+  test("other methods than GET and POST are still 405", async () => {
+    const t = testApp();
+    const { triggerToken } = seedAccount(t.ctx);
+    for (const method of ["PUT", "DELETE", "PATCH"]) {
+      const res = await t.app.request(`/p/${triggerToken}`, { method });
+      expect(res.status).toBe(405);
+      expect(res.headers.get("allow")).toBe("GET, POST");
+    }
     expect(pageCount(t)).toBe(0);
   });
 
