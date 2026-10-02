@@ -34,6 +34,8 @@ targets:
       path: iOSApp/Info.plist
       properties:
         CFBundleDisplayName: Pocket Pager
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UIBackgroundModes: [remote-notification]
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
@@ -51,6 +53,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.chuut.pagerio
         PRODUCT_NAME: Pocket Pager
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   PocketPager-macOS:
     type: application
     platform: macOS
@@ -64,6 +67,8 @@ targets:
       path: MacApp/Info.plist
       properties:
         CFBundleDisplayName: Pocket Pager
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
         GIDClientID: $(GOOGLE_CLIENT_ID_MACOS)
@@ -84,3 +89,4 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chuut.pagerio.mac
         PRODUCT_NAME: Pocket Pager
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

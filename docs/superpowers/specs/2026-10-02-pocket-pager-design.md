@@ -9,7 +9,7 @@ Working name: Pocket Pager (repo: `pagerio`, host: `pagerio.chuut.com`)
 A personal pager. You sign in on the website, get a private URL, and call it from scripts, deployments or AI agents. Every iPhone and Mac you have signed into sounds with the message.
 
 - **Audience:** individuals who run automations and want to be interrupted when something needs them. Team incident management is out of scope.
-- **First release:** multi-user from day one, distributed through TestFlight only (iOS and macOS). No App Store release.
+- **First release:** installed directly as development builds on the owner's devices (iOS and macOS); no TestFlight or App Store release for now.
 - **Builder:** one developer.
 - **Success:** a task finishes on your computer, and your iPhone and Mac both sound with the message.
 
@@ -264,7 +264,7 @@ An account with no devices still gets `202`. The page appears in history, and th
 
 - `pager.caf` is bundled in both apps. Phase 1 uses a placeholder; phase 3 replaces it.
 - Devices are labelled by platform, model and date added, because iOS no longer exposes user-chosen device names.
-- Distribution needs one Apple Developer account, one App ID per platform with push enabled, one APNs `.p8` key, and TestFlight for iOS and macOS.
+- Distribution needs one Apple Developer account, one App ID per platform with push enabled, and one APNs `.p8` key. Builds are installed directly as development builds (profiles valid one year); TestFlight is not used.
 
 ## 9. Security, privacy and operations
 
