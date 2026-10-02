@@ -6154,7 +6154,7 @@ git add .gitignore server/Dockerfile server/.dockerignore
 git commit -m "build(server): container image for siteio"
 ```
 
-- [ ] **Step 4: Google Cloud setup** (the user does this; the plan lists exact values)
+- [ ] **Step 4: Google Cloud setup** (already done on 2026-10-02; the client IDs are in Step 6 and Task 20. Kept for reference.)
   1. In the Google Cloud console, configure the **OAuth consent screen** (External, scope `openid email`) and add the testers' Google accounts.
   2. Create an **OAuth client, type Web application**:
      - Authorized redirect URIs: `https://pagerio.chuut.com/auth/google/callback` and `http://localhost:3000/auth/google/callback`.
@@ -6179,10 +6179,10 @@ TOKEN_ENC_KEY=$(openssl rand -base64 32)
 APNS_KEY_P8=$(base64 -i ~/.config/pagerio/AuthKey_<KEYID>.p8)
 APNS_KEY_ID=<KEYID>
 APNS_TEAM_ID=427N276E3Q
-GOOGLE_CLIENT_ID_WEB=<web client id>
-GOOGLE_CLIENT_SECRET_WEB=<web client secret>
-GOOGLE_CLIENT_ID_IOS=<ios client id>
-GOOGLE_CLIENT_ID_MACOS=<mac client id>
+GOOGLE_CLIENT_ID_WEB=931954287794-vcetjkvcbg7ua65fc12fsos957hblp5r.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET_WEB=<web client secret — typed by the user, never pasted in chat>
+GOOGLE_CLIENT_ID_IOS=931954287794-gcf7ob8rs8lhs17jnfijo2riagj8otf5.apps.googleusercontent.com
+GOOGLE_CLIENT_ID_MACOS=931954287794-ic9vsp6ur3avk1asjnqfmee12mmpe4no.apps.googleusercontent.com
 EOF
 ```
 
@@ -7302,13 +7302,13 @@ git commit -m "feat(pagerkit): device registration, pages store, notification ro
 
 - [ ] **Step 1: Add the Google client IDs to `apple/Config/Base.xcconfig`**
 
-Use the iOS client from Task 17, step 4. The reversed ID is the client ID with its parts reversed: `123-abc.apps.googleusercontent.com` becomes `com.googleusercontent.apps.123-abc`.
+These are the clients created in Google Cloud. The reversed ID is the client ID with its parts reversed.
 
 ```
-GOOGLE_CLIENT_ID_IOS = <ios client id>.apps.googleusercontent.com
-GOOGLE_REVERSED_CLIENT_ID_IOS = com.googleusercontent.apps.<ios client id>
-GOOGLE_CLIENT_ID_MACOS = <mac client id>.apps.googleusercontent.com
-GOOGLE_REVERSED_CLIENT_ID_MACOS = com.googleusercontent.apps.<mac client id>
+GOOGLE_CLIENT_ID_IOS = 931954287794-gcf7ob8rs8lhs17jnfijo2riagj8otf5.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID_IOS = com.googleusercontent.apps.931954287794-gcf7ob8rs8lhs17jnfijo2riagj8otf5
+GOOGLE_CLIENT_ID_MACOS = 931954287794-ic9vsp6ur3avk1asjnqfmee12mmpe4no.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID_MACOS = com.googleusercontent.apps.931954287794-ic9vsp6ur3avk1asjnqfmee12mmpe4no
 ```
 
 Place these above the `#include?` line. Client IDs are public identifiers, so committing them is safe.
