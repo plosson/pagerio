@@ -123,14 +123,22 @@ export interface ApnsSenderOptions {
 export function createApnsSender(config: ApnsConfig, options: ApnsSenderOptions = {}): ApnsSender {
   const hosts = options.hosts ?? APNS_HOSTS;
   const timeoutMs = options.timeoutMs ?? 10_000;
-  const keyPromise = importPKCS8(config.keyP8, "ES256");
+  let keyPromiseCache: Promise<Awaited<ReturnType<typeof importPKCS8>>> | null = null;
+
+  async function getKey() {
+    if (keyPromiseCache === null) {
+      keyPromiseCache = importPKCS8(config.keyP8, "ES256");
+    }
+    return keyPromiseCache;
+  }
+
   const tokens = new ProviderTokenCache(
     async (iat) =>
       new SignJWT({})
         .setProtectedHeader({ alg: "ES256", kid: config.keyId })
         .setIssuer(config.teamId)
         .setIssuedAt(iat)
-        .sign(await keyPromise),
+        .sign(await getKey()),
     options.now,
   );
   const sessions = new Map<string, http2.ClientHttp2Session>();
@@ -169,9 +177,12 @@ export function createApnsSender(config: ApnsConfig, options: ApnsSenderOptions 
         resolve(result);
       };
 
+      const origin = hosts[target.env];
       let request: http2.ClientHttp2Stream;
+      let session: http2.ClientHttp2Session;
       try {
-        request = sessionFor(hosts[target.env]).request({
+        session = sessionFor(origin);
+        request = session.request({
           ":method": "POST",
           ":path": `/3/device/${target.token}`,
           authorization,
@@ -188,6 +199,8 @@ export function createApnsSender(config: ApnsConfig, options: ApnsSenderOptions 
 
       timer = setTimeout(() => {
         request.close(http2.constants.NGHTTP2_CANCEL);
+        session.destroy();
+        if (sessions.get(origin) === session) sessions.delete(origin);
         finish({ kind: "retry", reason: "timeout" });
       }, timeoutMs);
 

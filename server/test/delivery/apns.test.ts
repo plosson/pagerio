@@ -203,4 +203,52 @@ describe("createApnsSender against a local HTTP/2 server", () => {
     expect((await s.send({ token: "../../etc", env: "sandbox", platform: "ios" }, message())).kind).toBe("invalid-token");
     expect(seen.length).toBe(0);
   });
+
+  test("timeout destroys the session, so a second send uses a fresh connection", async () => {
+    let requestCount = 0;
+    const { origin, seen } = await start((stream) => {
+      requestCount++;
+      if (requestCount === 1) {
+        // Never respond to first request (will timeout)
+      } else {
+        // Answer subsequent requests
+        stream.respond({ ":status": 200, "apns-id": "ok-123" });
+        stream.end();
+      }
+    });
+    const s = await makeSender(origin, 100);
+    // First send times out
+    const result1 = await s.send({ token: "ab".repeat(32), env: "sandbox", platform: "ios" }, message());
+    expect(result1).toEqual({ kind: "retry", reason: "timeout" });
+    // Second send should succeed with fresh session (not reuse dead connection)
+    const result2 = await s.send({ token: "cd".repeat(32), env: "sandbox", platform: "ios" }, message());
+    expect(result2).toEqual({ kind: "ok", apnsId: "ok-123" });
+    expect(seen.length).toBe(2); // Both requests made
+  });
+});
+
+describe("createApnsSender with malformed key", () => {
+  test("malformed key does not throw or reject on creation", async () => {
+    // This should NOT throw
+    const sender = createApnsSender({
+      keyP8: "-----BEGIN PRIVATE KEY-----\ngarbage\n-----END PRIVATE KEY-----",
+      keyId: "KID",
+      teamId: "TEAM",
+      topics: { ios: "com.test.ios", macos: "com.test.mac" },
+    });
+    expect(sender).toBeDefined();
+    sender.close();
+  });
+
+  test("malformed key causes send to return fail with provider_token_error", async () => {
+    const sender = createApnsSender({
+      keyP8: "-----BEGIN PRIVATE KEY-----\ngarbage\n-----END PRIVATE KEY-----",
+      keyId: "KID",
+      teamId: "TEAM",
+      topics: { ios: "com.test.ios", macos: "com.test.mac" },
+    });
+    const result = await sender.send({ token: "ab".repeat(32), env: "sandbox", platform: "ios" }, message());
+    expect(result).toEqual({ kind: "fail", reason: "provider_token_error" });
+    sender.close();
+  });
 });
