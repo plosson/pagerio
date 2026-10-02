@@ -141,6 +141,15 @@ describe("dashboard forms", () => {
   });
 });
 
+describe("caching", () => {
+  test("the signed-in dashboard is never cached", async () => {
+    const t = testApp();
+    const { session } = await signIn(t.app);
+    expect((await home(t.app, session!)).headers.get("cache-control")).toBe("no-store");
+    expect((await t.app.request("/")).headers.get("cache-control")).toBe("no-store");
+  });
+});
+
 describe("recent pages", () => {
   test("shows only the signed-in account's pages, escaped, linking to the public view", async () => {
     const t = testApp();

@@ -105,6 +105,7 @@ export function dashboardRoutes(deps: AppDeps): Hono {
   const routes = new Hono();
 
   routes.get("/", (c) => {
+    c.header("Cache-Control", "no-store");
     const web = currentWebSession(deps, c);
     const account = web ? getAccount(deps, web.session.account_id) : null;
     if (!web || !account) return renderHtml(c, <SignedOut />);
