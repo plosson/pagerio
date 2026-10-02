@@ -1354,8 +1354,10 @@ struct PocketPagerMacApp: App {
 `apple/Config/Base.xcconfig`:
 
 ```
-// Shared build settings. Put DEVELOPMENT_TEAM in Config/Local.xcconfig (git-ignored).
+// Shared build settings. The team ID is not a secret (it is in every signed app).
+DEVELOPMENT_TEAM = 427N276E3Q
 PAGERIO_API_BASE_URL = https:/$()/pagerio.chuut.com
+// Optional per-machine overrides, git-ignored.
 #include? "Local.xcconfig"
 ```
 
@@ -1457,21 +1459,33 @@ git commit -m "feat(apple): XcodeGen project, PagerKit basics, apps that display
 
 This task is done by hand with the user. Nothing is committed unless a fix is needed.
 
-- [ ] **Step 1: Apple Developer portal** (the user does this)
-  1. Create the App ID `com.chuut.pagerio` (iOS). Enable **Push Notifications** and **Time Sensitive Notifications**.
-  2. Create the App ID `com.chuut.pagerio.mac` (macOS). Enable the same two capabilities.
-  3. Under **Keys**, create a key with **Apple Push Notifications service (APNs)** enabled. Download `AuthKey_<KEYID>.p8` and note the Key ID and the Team ID.
+- [ ] **Step 1: Apple Developer setup** (Team ID `427N276E3Q`; `asc` is already authenticated on this Mac)
+
+Create both App IDs and turn on push and Time Sensitive notifications:
+
+```bash
+asc bundle-ids create --identifier com.chuut.pagerio --name "Pocket Pager" --platform IOS
+asc bundle-ids create --identifier com.chuut.pagerio.mac --name "Pocket Pager Mac" --platform MAC_OS
+for id in com.chuut.pagerio com.chuut.pagerio.mac; do
+  asc bundle-ids capabilities add --bundle "$id" --capability PUSH_NOTIFICATIONS
+  asc bundle-ids capabilities add --bundle "$id" --capability USERNOTIFICATIONS_TIMESENSITIVE
+  asc bundle-ids capabilities list --bundle "$id"
+done
+```
+
+If `asc` rejects a capability name, enable it on the App ID page in the portal instead. Xcode's automatic signing also adds missing capabilities on the first device build.
+
+The App Store Connect API cannot create APNs keys. In the Apple Developer portal, under **Certificates, IDs & Profiles › Keys**, create a key with **Apple Push Notifications service (APNs)** enabled (by computer use or by the user), then download `AuthKey_<KEYID>.p8` once and note the Key ID. Keep the file outside the repo, for example in `~/.config/pagerio/`, and never commit it.
 
 - [ ] **Step 2: Local configuration**
 
 ```bash
 cd server
 cat > .env <<EOF
-APNS_KEY_P8=$(base64 -i ~/Downloads/AuthKey_<KEYID>.p8)
+APNS_KEY_P8=$(base64 -i ~/.config/pagerio/AuthKey_<KEYID>.p8)
 APNS_KEY_ID=<KEYID>
-APNS_TEAM_ID=<TEAMID>
+APNS_TEAM_ID=427N276E3Q
 EOF
-echo 'DEVELOPMENT_TEAM = <TEAMID>' > ../apple/Config/Local.xcconfig
 cd ../apple && xcodegen generate && open PocketPager.xcodeproj
 ```
 
@@ -6148,10 +6162,12 @@ git commit -m "build(server): container image for siteio"
   3. Create an **OAuth client, type iOS**, with bundle ID `com.chuut.pagerio`. Note the client ID.
   4. Create another **OAuth client, type iOS** (Google uses this type for macOS), with bundle ID `com.chuut.pagerio.mac`. Note the client ID.
 
-- [ ] **Step 5: Push the repository** (the user confirms the repository name and visibility first)
+- [ ] **Step 5: Push the repository**
+
+`origin` is already the public repository `git@github.com:plosson/pagerio.git`. Before pushing, check that no secret is tracked:
 
 ```bash
-gh repo create plosson/pagerio --private --source . --push
+git ls-files | grep -E '\.env$|secrets\.env|\.p8$' && echo "STOP: secret tracked" || git push origin main
 ```
 
 - [ ] **Step 6: Create the production secrets file** (git-ignored)
@@ -6160,9 +6176,9 @@ gh repo create plosson/pagerio --private --source . --push
 cd server
 cat > secrets.env <<EOF
 TOKEN_ENC_KEY=$(openssl rand -base64 32)
-APNS_KEY_P8=$(base64 -i ~/Downloads/AuthKey_<KEYID>.p8)
+APNS_KEY_P8=$(base64 -i ~/.config/pagerio/AuthKey_<KEYID>.p8)
 APNS_KEY_ID=<KEYID>
-APNS_TEAM_ID=<TEAMID>
+APNS_TEAM_ID=427N276E3Q
 GOOGLE_CLIENT_ID_WEB=<web client id>
 GOOGLE_CLIENT_SECRET_WEB=<web client secret>
 GOOGLE_CLIENT_ID_IOS=<ios client id>
@@ -6175,13 +6191,13 @@ Store a copy of `TOKEN_ENC_KEY` in your password manager. If it is lost, every p
 - [ ] **Step 7: Deploy**
 
 ```bash
-siteio apps create pagerio --git https://github.com/plosson/pagerio --context server --port 3000 --git-token <github PAT with repo read>
+siteio apps create pagerio --git https://github.com/plosson/pagerio --context server --port 3000
 siteio apps set pagerio -v pagerio-data:/data -d pagerio.chuut.com -r unless-stopped -e PUBLIC_BASE_URL=https://pagerio.chuut.com
 siteio apps set pagerio --secret ./server/secrets.env
 siteio apps deploy pagerio
 ```
 
-If `pagerio.chuut.com` is not already covered by the siteio server's wildcard DNS, add an A record pointing at the server first.
+No DNS work is needed: siteio serves `*.chuut.com` and issues the certificate.
 
 - [ ] **Step 8: Verify production**
 
