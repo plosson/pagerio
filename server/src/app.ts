@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
 import type { FixedWindowLimiter } from "./api/ipLimiter";
 import { errorJson } from "./api/responses";
 import { appApiRoutes } from "./api/appApi";
@@ -8,6 +9,9 @@ import type { GoogleOAuthClient } from "./auth/googleOAuth";
 import type { Ctx } from "./context";
 import { oldestOverdueJobAt } from "./db/jobs";
 import { type Logger, requestLogger } from "./logging";
+import { webAuthRoutes } from "./web/authRoutes";
+import { dashboardRoutes } from "./web/dashboard";
+import { securityHeaders } from "./web/http";
 
 export interface AppDeps extends Ctx {
   logger: Logger;
@@ -20,6 +24,8 @@ export interface AppDeps extends Ctx {
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
   app.use("*", requestLogger(deps.logger));
+  app.use("*", securityHeaders());
+  app.use("/static/*", serveStatic({ root: "./public", rewriteRequestPath: (path) => path.replace(/^\/static/, "") }));
   app.onError((err, c) => {
     deps.logger.error("unhandled_error", { name: err.name });
     return errorJson(c, 500, "internal", "Something went wrong. Try again.");
@@ -33,5 +39,7 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.route("/", triggerRoutes(deps));
   app.route("/api", appApiRoutes(deps));
+  app.route("/", webAuthRoutes(deps));
+  app.route("/", dashboardRoutes(deps));
   return app;
 }

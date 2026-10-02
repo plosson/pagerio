@@ -1,7 +1,7 @@
 import { newId } from "../auth/tokens";
 import type { ApnsEnv, Platform } from "../config";
 import type { Ctx } from "../context";
-import { type DeviceRow, deleteDevice, getDevice, getDeviceByToken, insertDevice, updateDevice } from "../db/devices";
+import { type DeviceRow, deleteDevice, getDevice, getDeviceByToken, insertDevice, listDevicesForAccount, updateDevice } from "../db/devices";
 import { setSessionDevice, type SessionRow } from "../db/sessions";
 
 export type { DeviceRow };
@@ -53,4 +53,8 @@ export function registerCurrentDevice(ctx: Ctx, session: SessionRow, input: Devi
     setSessionDevice(ctx.db, session.id, row.id);
     return row;
   })();
+}
+
+export function listDevices(ctx: Ctx, accountId: string): DeviceRow[] {
+  return listDevicesForAccount(ctx.db, accountId);
 }

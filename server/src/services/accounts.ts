@@ -47,3 +47,7 @@ export function triggerUrl(ctx: Ctx, accountId: string): string {
   if (!account) throw new Error("Account not found");
   return `${ctx.config.publicBaseUrl}/p/${decryptSecret(ctx.config.tokenEncKey, account.trigger_token_enc)}`;
 }
+
+export function getAccount(ctx: Ctx, accountId: string): AccountRow | null {
+  return getAccountById(ctx.db, accountId);
+}
