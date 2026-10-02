@@ -83,6 +83,8 @@ describe("createGoogleOAuthClient", () => {
     ["an error status", new Response('{"error":"invalid_grant"}', { status: 400 })],
     ["a missing id_token", new Response("{}", { status: 200 })],
     ["a non-JSON body", new Response("<html>", { status: 200 })],
+    ["a null JSON body", new Response("null", { status: 200 })],
+    ["a JSON array body", new Response("[]", { status: 200 })],
   ] as const) {
     test(`throws AuthError on ${name}`, async () => {
       const client = createGoogleOAuthClient({ ...base, fetchFn: (async () => response) as unknown as typeof fetch });

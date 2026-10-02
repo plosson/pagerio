@@ -40,11 +40,14 @@ export function createGoogleOAuthClient(opts: {
           }).toString(),
         });
         if (!res.ok) throw new AuthError("code_exchange_failed");
-        body = (await res.json()) as { id_token?: unknown };
-      } catch {
+        const parsed = await res.json();
+        if (typeof parsed !== "object" || parsed === null) throw new AuthError("missing_id_token");
+        body = parsed as { id_token?: unknown };
+        if (typeof body.id_token !== "string" || body.id_token === "") throw new AuthError("missing_id_token");
+      } catch (err) {
+        if (err instanceof AuthError) throw err;
         throw new AuthError("code_exchange_failed");
       }
-      if (typeof body.id_token !== "string" || body.id_token === "") throw new AuthError("missing_id_token");
       return body.id_token;
     },
   };
