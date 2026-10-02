@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Config } from "../src/config";
 import type { Ctx } from "../src/context";
 import { openDatabase } from "../src/db/database";
+import { type AccountRow, findOrCreateAccount, triggerUrl } from "../src/services/accounts";
 
 export const T0 = Date.UTC(2026, 9, 2, 12, 0, 0);
 
@@ -35,4 +36,10 @@ export function testCtx(opts: { clock?: FakeClock; config?: Config; path?: strin
 
 export function tempDbPath(): string {
   return join(mkdtempSync(join(tmpdir(), "pagerio-")), "test.db");
+}
+
+export function seedAccount(ctx: Ctx, sub = "sub-1", email = "a@example.com"): { account: AccountRow; triggerToken: string } {
+  const account = findOrCreateAccount(ctx, { sub, email });
+  const triggerToken = triggerUrl(ctx, account.id).split("/p/")[1]!;
+  return { account, triggerToken };
 }
