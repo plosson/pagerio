@@ -26,7 +26,11 @@ fi
 sed -i '' -E "s/^(  \"version\": )\"[^\"]*\"/\1\"$VERSION\"/" server/package.json
 sed -i '' -E "s/^([[:space:]]*MARKETING_VERSION: )\"[^\"]*\"/\1\"$VERSION\"/" apple/project.yml
 
-(cd server && bun test >/dev/null) || { echo "✗ server tests failed; version files left modified" >&2; exit 1; }
+if ! TEST_OUTPUT="$(cd server && bun test 2>&1)"; then
+  echo "$TEST_OUTPUT" | tail -30 >&2
+  echo "✗ server tests failed; version files left modified" >&2
+  exit 1
+fi
 
 git add server/package.json apple/project.yml
 git diff --cached --quiet || git commit --quiet -m "chore(release): $TAG"
