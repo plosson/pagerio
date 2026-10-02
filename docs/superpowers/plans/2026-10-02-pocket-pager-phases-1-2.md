@@ -148,13 +148,14 @@ pagerio/
   - `loadApnsConfig(env?): ApnsConfig` and `loadConfig(env?): Config`.
   - `createApp(): Hono` (gains a `deps` parameter in Task 12).
 
-- [ ] **Step 1: Create the repo-level `.gitignore`**
+- [ ] **Step 1: Replace the repo-level `.gitignore`** (it already ignores `server/secrets.env`; keep that line)
 
 ```gitignore
 .DS_Store
 *.p8
 server/node_modules/
 server/.env
+server/secrets.env
 server/data/
 apple/PocketPager.xcodeproj/
 apple/Config/Local.xcconfig
@@ -6126,11 +6127,7 @@ data
 test
 ```
 
-Append to the root `.gitignore`:
-
-```gitignore
-server/secrets.env
-```
+`server/secrets.env` is already ignored (Task 1).
 
 - [ ] **Step 2: Build and smoke-test the image locally** (skip this step if Docker is not installed)
 
@@ -6170,23 +6167,18 @@ git commit -m "build(server): container image for siteio"
 git ls-files | grep -E '\.env$|secrets\.env|\.p8$' && echo "STOP: secret tracked" || git push origin main
 ```
 
-- [ ] **Step 6: Create the production secrets file** (git-ignored)
+- [ ] **Step 6: Complete the production secrets file** (git-ignored, mode 600)
+
+`server/secrets.env` was created on 2026-10-02 with a generated `TOKEN_ENC_KEY`, the team ID and the three Google client IDs. Fill in what is still empty, without printing the values:
+- `APNS_KEY_P8`: the output of `base64 -i ~/.config/pagerio/AuthKey_<KEYID>.p8`.
+- `APNS_KEY_ID`: the Key ID from Task 4.
+- `GOOGLE_CLIENT_SECRET_WEB`: the user types it in.
+
+Check that nothing is empty, showing names only:
 
 ```bash
-cd server
-cat > secrets.env <<EOF
-TOKEN_ENC_KEY=$(openssl rand -base64 32)
-APNS_KEY_P8=$(base64 -i ~/.config/pagerio/AuthKey_<KEYID>.p8)
-APNS_KEY_ID=<KEYID>
-APNS_TEAM_ID=427N276E3Q
-GOOGLE_CLIENT_ID_WEB=931954287794-vcetjkvcbg7ua65fc12fsos957hblp5r.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET_WEB=<web client secret — typed by the user, never pasted in chat>
-GOOGLE_CLIENT_ID_IOS=931954287794-gcf7ob8rs8lhs17jnfijo2riagj8otf5.apps.googleusercontent.com
-GOOGLE_CLIENT_ID_MACOS=931954287794-ic9vsp6ur3avk1asjnqfmee12mmpe4no.apps.googleusercontent.com
-EOF
+grep -E '^[A-Z_]+=$' server/secrets.env | cut -d= -f1   # expect no output
 ```
-
-Store a copy of `TOKEN_ENC_KEY` in your password manager. If it is lost, every pager URL must be regenerated.
 
 - [ ] **Step 7: Deploy**
 
