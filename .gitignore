@@ -9,3 +9,5 @@ apple/Config/Local.xcconfig
 apple/PagerKit/.build/
 apple/build/
 xcuserdata/
+.claude/settings.json
+.siteio/
