@@ -5,6 +5,8 @@ import type { Config } from "../src/config";
 import type { Ctx } from "../src/context";
 import { openDatabase } from "../src/db/database";
 import { type AccountRow, findOrCreateAccount, triggerUrl } from "../src/services/accounts";
+import { type DeviceInput, type DeviceRow, registerCurrentDevice } from "../src/services/devices";
+import { createSession, type SessionRow } from "../src/services/sessions";
 
 export const T0 = Date.UTC(2026, 9, 2, 12, 0, 0);
 
@@ -42,4 +44,23 @@ export function seedAccount(ctx: Ctx, sub = "sub-1", email = "a@example.com"): {
   const account = findOrCreateAccount(ctx, { sub, email });
   const triggerToken = triggerUrl(ctx, account.id).split("/p/")[1]!;
   return { account, triggerToken };
+}
+
+let deviceCounter = 0;
+
+export function seedDevice(
+  ctx: Ctx,
+  accountId: string,
+  overrides: Partial<DeviceInput> = {},
+): { device: DeviceRow; sessionToken: string; session: SessionRow } {
+  deviceCounter += 1;
+  const { token, session } = createSession(ctx, accountId, "app");
+  const device = registerCurrentDevice(ctx, session, {
+    apnsToken: deviceCounter.toString(16).padStart(64, "0"),
+    platform: "ios",
+    model: "iPhone17,1",
+    apnsEnv: "sandbox",
+    ...overrides,
+  });
+  return { device, sessionToken: token, session: { ...session, device_id: device.id } };
 }

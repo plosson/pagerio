@@ -1,5 +1,6 @@
 import { hashToken, isTokenShaped, newId, randomToken } from "../auth/tokens";
 import type { Ctx } from "../context";
+import { deleteDevice } from "../db/devices";
 import { deleteSession, getSessionByHash, insertSession, type SessionKind, type SessionRow, touchSession } from "../db/sessions";
 
 export type { SessionKind, SessionRow };
@@ -35,6 +36,10 @@ export function resolveSession(ctx: Ctx, token: string, kind: SessionKind): Sess
   return { ...session, last_used_at: now };
 }
 
+/** App sign-out removes the device too (its session cascades), so a signed-out phone stops getting pages. */
 export function revokeSession(ctx: Ctx, session: SessionRow): void {
-  deleteSession(ctx.db, session.id);
+  ctx.db.transaction(() => {
+    if (session.kind === "app" && session.device_id) deleteDevice(ctx.db, session.device_id);
+    deleteSession(ctx.db, session.id);
+  })();
 }
