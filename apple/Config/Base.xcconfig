@@ -1,0 +1,5 @@
+// Shared build settings. The team ID is not a secret (it is in every signed app).
+DEVELOPMENT_TEAM = 427N276E3Q
+PAGERIO_API_BASE_URL = https:/$()/pagerio.chuut.com
+// Optional per-machine overrides, git-ignored.
+#include? "Local.xcconfig"

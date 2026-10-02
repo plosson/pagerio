@@ -1,0 +1,70 @@
+name: PocketPager
+options:
+  bundleIdPrefix: com.chuut
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+packages:
+  PagerKit:
+    path: PagerKit
+targets:
+  PocketPager-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - iOSApp
+      - Shared
+    dependencies:
+      - package: PagerKit
+    info:
+      path: iOSApp/Info.plist
+      properties:
+        CFBundleDisplayName: Pocket Pager
+        UILaunchScreen: {}
+        UIBackgroundModes: [remote-notification]
+        PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
+    entitlements:
+      path: iOSApp/PocketPager-iOS.entitlements
+      properties:
+        aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chuut.pagerio
+        PRODUCT_NAME: Pocket Pager
+        TARGETED_DEVICE_FAMILY: "1"
+  PocketPager-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - MacApp
+      - Shared
+    dependencies:
+      - package: PagerKit
+    info:
+      path: MacApp/Info.plist
+      properties:
+        CFBundleDisplayName: Pocket Pager
+        LSUIElement: true
+        PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
+    entitlements:
+      path: MacApp/PocketPager-macOS.entitlements
+      properties:
+        com.apple.developer.aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chuut.pagerio.mac
+        PRODUCT_NAME: Pocket Pager
