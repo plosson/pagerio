@@ -47,6 +47,7 @@ struct HomeView: View {
                                 await services.signOut()
                             }
                         }
+                        Text("Pocket Pager \(AppVersion.display)")
                     } label: {
                         Image(systemName: "ellipsis.circle").accessibilityLabel("More")
                     }

@@ -63,7 +63,11 @@ struct MenuPanel: View {
                 }
             }
             Divider()
-            Button("Quit Pocket Pager") { NSApp.terminate(nil) }
+            HStack {
+                Button("Quit Pocket Pager") { NSApp.terminate(nil) }
+                Spacer()
+                Text(AppVersion.display).font(.caption).foregroundStyle(.tertiary)
+            }
         }
         .padding(14)
         .frame(width: 340)

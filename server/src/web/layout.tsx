@@ -1,4 +1,5 @@
 import type { Child } from "hono/jsx";
+import { APP_VERSION } from "../version";
 
 export function Layout(props: { title: string; children?: Child }) {
   return (
@@ -13,6 +14,7 @@ export function Layout(props: { title: string; children?: Child }) {
       </head>
       <body>
         <main>{props.children}</main>
+        <footer class="version">v{APP_VERSION}</footer>
       </body>
     </html>
   );
