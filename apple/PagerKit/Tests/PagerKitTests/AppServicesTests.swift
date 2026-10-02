@@ -32,9 +32,14 @@ extension Network {
             StubURLProtocol.reset { _ in StubURLProtocol.json(401, #"{"error":{"code":"unauthorized","message":"Sign in again."}}"#) }
             let app = services(InMemorySecretStore(["session_token": "old"]))
             #expect(app.session.isSignedIn)
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, #"{"pages":[{"id":"pg_1","title":null,"message":"hi","url":null,"view_url":"https://pager.test/v/a","source":"test","created_at":"2026-10-02T12:00:00.000Z"}],"next_before":null}"#) }
+            await app.pages.refresh()
+            #expect(app.pages.pages.count == 1)
+            StubURLProtocol.reset { _ in StubURLProtocol.json(401, #"{"error":{"code":"unauthorized","message":"Sign in again."}}"#) }
             await app.pages.refresh()
             for _ in 0..<50 where app.session.isSignedIn { await Task.yield() }
             #expect(!app.session.isSignedIn)
+            #expect(app.pages.pages.isEmpty)
         }
 
         @Test func signOutForgetsPagesAndSession() async {

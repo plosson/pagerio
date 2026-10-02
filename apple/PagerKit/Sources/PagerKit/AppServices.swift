@@ -13,17 +13,24 @@ public final class AppServices {
 
     public init(baseURL: URL, environment: ApnsEnvironment, store: any SecretStore, urlSession: URLSession = .shared) {
         let session = SessionController(store: store)
+        let relay = UnauthorizedRelay()
         let api = APIClient(
             baseURL: baseURL,
             session: urlSession,
             tokenProvider: { store.read(SessionController.tokenKey) },
-            onUnauthorized: { [weak session] in
-                Task { @MainActor in session?.clear() }
+            onUnauthorized: {
+                Task { @MainActor in
+                    relay.pages?.reset()
+                    relay.session?.clear()
+                }
             }
         )
         self.api = api
         self.session = session
-        self.pages = PagesStore(api: api)
+        let pages = PagesStore(api: api)
+        relay.session = session
+        relay.pages = pages
+        self.pages = pages
         self.permission = NotificationPermission()
         self.registrar = DeviceRegistrar(api: api, environment: environment, isSignedIn: { [weak session] in session?.isSignedIn ?? false })
         self.dashboardURL = baseURL
@@ -36,8 +43,8 @@ public final class AppServices {
     }
 
     public func signOut() async {
-        await session.signOut(api: api)
         pages.reset()
+        await session.signOut(api: api)
     }
 
     /// On launch, on foreground, on wake and when the menu-bar panel opens.
@@ -52,4 +59,10 @@ public final class AppServices {
         }
         return URL(string: "https://pagerio.chuut.com")!
     }
+}
+
+/// Lets the API client's 401 handler reach the session and pages store, which are created after it.
+@MainActor private final class UnauthorizedRelay {
+    weak var session: SessionController?
+    weak var pages: PagesStore?
 }

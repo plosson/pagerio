@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import PagerKit
 
+private let emptyPages = #"{"pages":[],"next_before":null}"#
 private let onePage = #"{"pages":[{"id":"pg_1","title":null,"message":"hi","url":null,"view_url":"https://pager.test/v/a","source":"test","created_at":"2026-10-02T12:00:00.000Z"}],"next_before":null}"#
 
 extension Network {
@@ -51,6 +52,49 @@ extension Network {
             let store = PagesStore(api: api)
             await store.sendTest()
             #expect(store.lastError == "Too many pages. Try again later.")
+        }
+
+        /// Holds a stubbed response until released, so a test can interleave calls with an in-flight load.
+        final class Gate: @unchecked Sendable {
+            let semaphore = DispatchSemaphore(value: 0)
+            func release() { semaphore.signal() }
+        }
+
+        func waitForRequests(_ count: Int) async {
+            for _ in 0..<2000 where StubURLProtocol.requests.count < count { try? await Task.sleep(for: .milliseconds(1)) }
+        }
+
+        @Test func aRefreshFinishingAfterResetDoesNotBringOldPagesBack() async {
+            let gate = Gate()
+            StubURLProtocol.reset { _ in gate.semaphore.wait(); return StubURLProtocol.json(200, onePage) }
+            let store = PagesStore(api: api)
+            let inFlight = Task { await store.refresh() }
+            await waitForRequests(1)
+            store.reset()
+            gate.release()
+            await inFlight.value
+            #expect(store.pages.isEmpty)
+            #expect(store.lastError == nil)
+        }
+
+        @Test func aRefreshRequestedWhileLoadingRunsExactlyOneMoreTime() async {
+            let gate = Gate()
+            let calls = Counter()
+            StubURLProtocol.reset { _ in
+                calls.hit()
+                if calls.value == 1 { gate.semaphore.wait(); return StubURLProtocol.json(200, emptyPages) }
+                return StubURLProtocol.json(200, onePage)
+            }
+            let store = PagesStore(api: api)
+            let first = Task { await store.refresh() }
+            await waitForRequests(1)
+            await store.refresh()
+            await store.refresh()
+            gate.release()
+            await first.value
+            #expect(StubURLProtocol.requests.count == 2)
+            #expect(store.pages.map(\.id) == ["pg_1"])
+            #expect(!store.isLoading)
         }
     }
 }
