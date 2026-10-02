@@ -10,14 +10,17 @@ export function triggerRoutes(deps: AppDeps): Hono {
   const routes = new Hono();
 
   routes.post("/p/:token", async (c) => {
-    const ip = deps.ipLimiter.hit(clientIp(c));
-    if (!ip.ok) return rateLimitedJson(c, ip.retryAfterSeconds, "Too many requests. Slow down.");
-
     const tooLarge = () => errorJson(c, 413, "payload_too_large", `Request body must be at most ${LIMITS.bodyBytes} bytes.`);
     if (Number(c.req.header("content-length") ?? 0) > LIMITS.bodyBytes) return tooLarge();
 
     const account = findAccountByTriggerToken(deps, c.req.param("token"));
-    if (!account) return errorJson(c, 404, "not_found", "Unknown pager URL.");
+    if (!account) {
+      // Only token guesses count against the per-IP limit: behind Cloudflare the IP is a shared edge address,
+      // so limiting valid tokens would let anyone flooding unknown tokens lock out legitimate triggers.
+      const ip = deps.ipLimiter.hit(clientIp(c));
+      if (!ip.ok) return rateLimitedJson(c, ip.retryAfterSeconds, "Too many requests. Slow down.");
+      return errorJson(c, 404, "not_found", "Unknown pager URL.");
+    }
 
     const body = new Uint8Array(await c.req.arrayBuffer());
     if (body.length > LIMITS.bodyBytes) return tooLarge();

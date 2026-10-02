@@ -117,15 +117,24 @@ describe("POST /p/:token", () => {
     expect(res.status).toBe(400);
   });
 
-  test("the per-IP limit cannot be dodged by spoofing the left of X-Forwarded-For", async () => {
+  test("the per-IP limit on unknown tokens cannot be dodged by spoofing the left of X-Forwarded-For", async () => {
+    const config = testConfig({ limits: { pagesPerMinute: 1000, pagesPerDay: 1000, triggerRequestsPerIpPerMinute: 30 } });
+    const t = testApp({ config });
+    const unknown = "x".repeat(43);
+    for (let i = 0; i < 30; i++) expect((await post(t.app, unknown, { ip: `10.0.0.${i}, 203.0.113.1` })).status).toBe(404);
+    const blocked = await post(t.app, unknown, { ip: "10.9.9.9, 203.0.113.1" });
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("retry-after")).not.toBeNull();
+    expect((await post(t.app, unknown, { ip: "198.51.100.7" })).status).toBe(404);
+  });
+
+  test("an IP limited by unknown tokens can still trigger with a valid token", async () => {
     const config = testConfig({ limits: { pagesPerMinute: 1000, pagesPerDay: 1000, triggerRequestsPerIpPerMinute: 30 } });
     const t = testApp({ config });
     const { triggerToken } = seedAccount(t.ctx);
-    for (let i = 0; i < 30; i++) expect((await post(t.app, triggerToken, { ip: `10.0.0.${i}, 203.0.113.1` })).status).toBe(202);
-    const blocked = await post(t.app, triggerToken, { ip: "10.9.9.9, 203.0.113.1" });
-    expect(blocked.status).toBe(429);
-    expect(blocked.headers.get("retry-after")).not.toBeNull();
-    expect((await post(t.app, triggerToken, { ip: "198.51.100.7" })).status).toBe(202);
+    for (let i = 0; i < 30; i++) await post(t.app, "x".repeat(43));
+    expect((await post(t.app, "x".repeat(43))).status).toBe(429);
+    expect((await post(t.app, triggerToken)).status).toBe(202);
   });
 
   test("logs never contain the token or the message", async () => {

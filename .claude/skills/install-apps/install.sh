@@ -48,8 +48,12 @@ install_mac() {
 # Prints "<devicectl identifier> <udid>" for the first paired iPhone.
 paired_iphone() {
   local json="$LOGS/devices.json"
-  xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1
-  python3 - "$json" <<'PY'
+  rm -f "$json"
+  if ! xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1 || [ ! -s "$json" ]; then
+    echo "✗ Could not list devices (xcrun devicectl failed). Is Xcode installed and the iPhone connected?" >&2
+    exit 1
+  fi
+  uv run --no-project python3 - "$json" <<'PY'
 import json, sys
 for device in json.load(open(sys.argv[1]))["result"]["devices"]:
     hw, conn = device["hardwareProperties"], device["connectionProperties"]

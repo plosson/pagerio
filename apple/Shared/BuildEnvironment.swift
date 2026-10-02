@@ -1,7 +1,8 @@
 import PagerKit
 
 extension ApnsEnvironment {
-    /// Debug builds run from Xcode use the APNs sandbox; archived (TestFlight) builds use production.
+    /// Debug builds (what the install skill produces) use the APNs sandbox; any other configuration would report
+    /// production. TestFlight is not used.
     static var current: ApnsEnvironment {
         #if DEBUG
         .sandbox
