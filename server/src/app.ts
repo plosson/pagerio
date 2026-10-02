@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { FixedWindowLimiter } from "./api/ipLimiter";
 import { errorJson } from "./api/responses";
+import { appApiRoutes } from "./api/appApi";
 import { triggerRoutes } from "./api/trigger";
 import type { GoogleVerifier } from "./auth/google";
 import type { GoogleOAuthClient } from "./auth/googleOAuth";
@@ -31,5 +32,6 @@ export function createApp(deps: AppDeps): Hono {
     return c.json({ ok: true, oldest_pending_ms: oldest === null ? 0 : now - oldest });
   });
   app.route("/", triggerRoutes(deps));
+  app.route("/api", appApiRoutes(deps));
   return app;
 }

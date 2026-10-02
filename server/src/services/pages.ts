@@ -3,7 +3,16 @@ import type { Config } from "../config";
 import type { Ctx } from "../context";
 import { listDevicesForAccount } from "../db/devices";
 import { insertJob } from "../db/jobs";
-import { countPagesSince, findRecentPageByIdempotencyKey, insertPage, oldestPageSince, type PageRow, type PageSource } from "../db/pages";
+import {
+  countPagesSince,
+  findRecentPageByIdempotencyKey,
+  getPageById,
+  insertPage,
+  listPages,
+  oldestPageSince,
+  type PageRow,
+  type PageSource,
+} from "../db/pages";
 import type { PageInput } from "./pageInput";
 
 export type { PageRow, PageSource };
@@ -83,4 +92,19 @@ export function createPage(
     }
     return { ok: true, page, created: true };
   })();
+}
+
+export function listPagesForAccount(
+  ctx: Ctx,
+  accountId: string,
+  opts: { beforeId: string | null; limit: number },
+): { ok: true; pages: PageRow[]; nextBefore: string | null } | { ok: false; message: string } {
+  let before: { created_at: number; id: string } | null = null;
+  if (opts.beforeId) {
+    const cursor = getPageById(ctx.db, opts.beforeId);
+    if (!cursor || cursor.account_id !== accountId) return { ok: false, message: "Unknown cursor." };
+    before = { created_at: cursor.created_at, id: cursor.id };
+  }
+  const pages = listPages(ctx.db, accountId, { since: ctx.now() - PAGE_RETENTION_MS, before, limit: opts.limit });
+  return { ok: true, pages, nextBefore: pages.length === opts.limit ? pages.at(-1)!.id : null };
 }
