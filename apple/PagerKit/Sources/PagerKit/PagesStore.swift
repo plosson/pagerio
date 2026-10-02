@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 @MainActor @Observable
@@ -56,6 +57,8 @@ public final class PagesStore {
     }
 
     static func describe(_ error: any Error) -> String {
-        (error as? APIError)?.message ?? "Couldn't reach Pocket Pager. Check your connection."
+        if let apiError = error as? APIError { return apiError.message }
+        if error is URLError { return "Couldn't reach Pocket Pager. Check your connection." }
+        return "Pocket Pager sent an unexpected response. Try again later."
     }
 }

@@ -63,10 +63,12 @@ public struct DeviceRegistration: Encodable, Equatable, Sendable {
     }
 }
 
-public struct APIError: Error, Equatable, Sendable {
+public struct APIError: Error, LocalizedError, Equatable, Sendable {
     public let status: Int
     public let code: String
     public let message: String
+
+    public var errorDescription: String? { message }
 }
 
 struct ErrorEnvelope: Decodable {

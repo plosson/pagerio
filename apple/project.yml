@@ -39,6 +39,7 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes: [remote-notification]
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
+        PagerioApsEnvironment: $(APS_ENVIRONMENT)
         GIDClientID: $(GOOGLE_CLIENT_ID_IOS)
         CFBundleURLTypes:
           - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID_IOS)]
@@ -46,7 +47,7 @@ targets:
     entitlements:
       path: iOSApp/PocketPager-iOS.entitlements
       properties:
-        aps-environment: development
+        aps-environment: $(APS_ENVIRONMENT)
         com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
@@ -71,6 +72,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
+        PagerioApsEnvironment: $(APS_ENVIRONMENT)
         GIDClientID: $(GOOGLE_CLIENT_ID_MACOS)
         CFBundleURLTypes:
           - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID_MACOS)]
@@ -78,7 +80,7 @@ targets:
     entitlements:
       path: MacApp/PocketPager-macOS.entitlements
       properties:
-        com.apple.developer.aps-environment: development
+        com.apple.developer.aps-environment: $(APS_ENVIRONMENT)
         com.apple.developer.usernotifications.time-sensitive: true
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true

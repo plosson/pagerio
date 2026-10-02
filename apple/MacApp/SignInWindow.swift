@@ -37,14 +37,22 @@ struct SignInWindow: View {
     private func signIn() async {
         isWorking = true
         defer { isWorking = false }
-        guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible) else { return }
+        guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible) else {
+            error = "Couldn't open the Google sign-in window. Try again."
+            return
+        }
         do {
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: window)
             guard let idToken = result.user.idToken?.tokenString else {
                 error = "Google didn't return an identity token. Please try again."
                 return
             }
-            try await services.signIn(idToken: idToken)
+            do {
+                try await services.signIn(idToken: idToken)
+            } catch {
+                GIDSignIn.sharedInstance.signOut() // the next attempt starts clean
+                throw error
+            }
             await services.permission.request()
             LoginItem.set(true) // a pager that isn't running can't show its menu
             dismissWindow(id: Self.id)

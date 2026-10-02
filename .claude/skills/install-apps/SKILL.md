@@ -32,9 +32,10 @@ build's log path is printed at the start.
 
 ## Rules
 
-- **Always Debug.** The entitlements use `aps-environment: development`, and Debug builds tell
-  the server their device uses the APNs **sandbox**. A Release build signed for development
-  would claim "production", and Apple would reject its pushes.
+- **The APNs environment comes from `APS_ENVIRONMENT` in `apple/Config/Base.xcconfig`** (currently
+  `development` = sandbox). The aps-environment entitlement and the app's reported environment
+  (Info.plist `PagerioApsEnvironment`) both read it, so they cannot disagree. The install script
+  still builds Debug.
 - Don't commit anything this produces. `apple/build/` and the `.xcodeproj` are git-ignored.
 - Signing uses team `427N276E3Q` with `-allowProvisioningUpdates`. A new Mac or iPhone is
   registered automatically (`-allowProvisioningDeviceRegistration`).

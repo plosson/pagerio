@@ -35,6 +35,13 @@ extension Network {
             #expect(store.lastError == "Couldn't reach Pocket Pager. Check your connection.")
         }
 
+        @Test func anUnreadableResponseGivesAnUnexpectedResponseMessage() async {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, "{") }
+            let store = PagesStore(api: api)
+            await store.refresh()
+            #expect(store.lastError == "Pocket Pager sent an unexpected response. Try again later.")
+        }
+
         @Test func sendTestPostsThenRefreshes() async {
             StubURLProtocol.reset { request in
                 request.url?.path == "/api/test"

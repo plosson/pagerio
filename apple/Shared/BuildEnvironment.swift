@@ -1,13 +1,10 @@
+import Foundation
 import PagerKit
 
 extension ApnsEnvironment {
-    /// Debug builds (what the install skill produces) use the APNs sandbox; any other configuration would report
-    /// production. TestFlight is not used.
+    /// Comes from APS_ENVIRONMENT in Base.xcconfig, the same setting the aps-environment entitlement uses,
+    /// so the environment reported to the server always matches how the app is signed.
     static var current: ApnsEnvironment {
-        #if DEBUG
-        .sandbox
-        #else
-        .production
-        #endif
+        .fromApsEnvironment(Bundle.main.object(forInfoDictionaryKey: "PagerioApsEnvironment") as? String)
     }
 }

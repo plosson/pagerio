@@ -43,14 +43,22 @@ struct SignInView: View {
         guard let presenter = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController })
             .first
-        else { return }
+        else {
+            error = "Couldn't open the Google sign-in window. Try again."
+            return
+        }
         do {
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
             guard let idToken = result.user.idToken?.tokenString else {
                 error = "Google didn't return an identity token. Please try again."
                 return
             }
-            try await services.signIn(idToken: idToken)
+            do {
+                try await services.signIn(idToken: idToken)
+            } catch {
+                GIDSignIn.sharedInstance.signOut() // the next attempt starts clean
+                throw error
+            }
             error = nil
             await services.permission.request()
         } catch let googleError as GIDSignInError where googleError.code == .canceled {

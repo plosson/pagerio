@@ -35,6 +35,8 @@
 	<false/>
 	<key>PagerioAPIBaseURL</key>
 	<string>$(PAGERIO_API_BASE_URL)</string>
+	<key>PagerioApsEnvironment</key>
+	<string>$(APS_ENVIRONMENT)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
