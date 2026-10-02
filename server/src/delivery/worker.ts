@@ -156,6 +156,10 @@ export class DeliveryWorker {
         markFailed(db, jobId, result.reason, at);
         break;
     }
-    logger.info("delivery", { outcome: result.kind, platform: job.platform });
+    logger.info("delivery", {
+      outcome: result.kind,
+      platform: job.platform,
+      ...(result.kind === "ok" ? {} : { reason: result.reason }),
+    });
   }
 }

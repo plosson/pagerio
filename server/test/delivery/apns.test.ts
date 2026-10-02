@@ -95,6 +95,31 @@ describe("classifyResponse", () => {
 });
 
 describe("ProviderTokenCache", () => {
+  test("concurrent sends share one signed token, including after expiry", async () => {
+    let t = 1_000_000;
+    let signs = 0;
+    const cache = new ProviderTokenCache(async () => {
+      const sequence = ++signs;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return `jwt-${sequence}`;
+    }, () => t);
+    expect(await Promise.all([cache.get(), cache.get(), cache.get()])).toEqual(["jwt-1", "jwt-1", "jwt-1"]);
+    t += 50 * 60_000;
+    expect(await Promise.all([cache.get(), cache.get()])).toEqual(["jwt-2", "jwt-2"]);
+    expect(signs).toBe(2);
+  });
+
+  test("a late expired-token response does not invalidate the replacement", async () => {
+    let signs = 0;
+    const cache = new ProviderTokenCache(async () => `jwt-${++signs}`);
+    const old = await cache.get();
+    cache.invalidate(old);
+    expect(await cache.get()).toBe("jwt-2");
+    cache.invalidate(old);
+    expect(await cache.get()).toBe("jwt-2");
+    expect(signs).toBe(2);
+  });
+
   test("reuses a token for 50 minutes, then re-signs; invalidate forces a new one", async () => {
     let t = 1_000_000;
     let signs = 0;
@@ -202,6 +227,26 @@ describe("createApnsSender against a local HTTP/2 server", () => {
     const s = await makeSender(origin);
     expect((await s.send({ token: "../../etc", env: "sandbox", platform: "ios" }, message())).kind).toBe("invalid-token");
     expect(seen.length).toBe(0);
+  });
+
+  test("a reset stream retires the connection before retrying", async () => {
+    let firstSession: http2.Http2Session | undefined;
+    let count = 0;
+    const { origin } = await start((stream) => {
+      stream.on("error", () => {});
+      if (++count === 1) {
+        firstSession = stream.session;
+        stream.close(http2.constants.NGHTTP2_INTERNAL_ERROR);
+      } else {
+        expect(stream.session).not.toBe(firstSession);
+        stream.respond({ ":status": 200, "apns-id": "recovered" });
+        stream.end();
+      }
+    });
+    const s = await makeSender(origin);
+    const target = { token: "ab".repeat(32), env: "sandbox" as const, platform: "ios" as const };
+    expect((await s.send(target, message())).kind).toBe("retry");
+    expect(await s.send(target, message())).toEqual({ kind: "ok", apnsId: "recovered" });
   });
 
   test("timeout destroys the session, so a second send uses a fresh connection", async () => {

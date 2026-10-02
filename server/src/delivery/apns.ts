@@ -94,6 +94,8 @@ export function classifyResponse(status: number, body: string, apnsId: string | 
 export class ProviderTokenCache {
   private token: string | null = null;
   private issuedAt = 0;
+  private signing: Promise<string> | null = null;
+  private generation = 0;
 
   constructor(
     private readonly sign: (issuedAtSeconds: number) => Promise<string>,
@@ -102,15 +104,30 @@ export class ProviderTokenCache {
 
   async get(): Promise<string> {
     const now = this.now();
-    if (this.token === null || now - this.issuedAt >= PROVIDER_TOKEN_TTL_MS) {
-      this.token = await this.sign(Math.floor(now / 1000));
-      this.issuedAt = now;
+    if (this.token !== null && now - this.issuedAt < PROVIDER_TOKEN_TTL_MS) return this.token;
+    if (this.signing) return this.signing;
+    const generation = this.generation;
+    const signing = this.sign(Math.floor(now / 1000)).then((token) => {
+      if (generation === this.generation) {
+        this.token = token;
+        this.issuedAt = now;
+      }
+      return token;
+    });
+    this.signing = signing;
+    try {
+      return await signing;
+    } finally {
+      if (this.signing === signing) this.signing = null;
     }
-    return this.token;
   }
 
-  invalidate(): void {
+  invalidate(rejectedToken?: string): void {
+    // A late rejection of an old token must not discard the replacement token.
+    if (rejectedToken !== undefined && this.token !== rejectedToken) return;
+    this.generation++;
     this.token = null;
+    this.signing = null;
   }
 }
 
@@ -193,6 +210,9 @@ export function createApnsSender(config: ApnsConfig, options: ApnsSenderOptions 
           "content-type": "application/json",
         });
       } catch {
+        const broken = sessions.get(origin);
+        sessions.delete(origin);
+        broken?.destroy();
         finish({ kind: "retry", reason: "connection_error" });
         return;
       }
@@ -217,11 +237,30 @@ export function createApnsSender(config: ApnsConfig, options: ApnsSenderOptions 
         data += chunk;
       });
       request.on("end", () => {
+        // Bun can emit end (without error) for a reset stream with no response headers.
+        if (status === 0 || request.rstCode !== 0) {
+          discardConnection();
+          finish({ kind: "retry", reason: "connection_closed" });
+          return;
+        }
         const result = classifyResponse(status, data, apnsId);
-        if (result.kind === "retry" && result.reason === "ExpiredProviderToken") tokens.invalidate();
+        if (result.kind === "retry" && result.reason === "ExpiredProviderToken") tokens.invalidate(authorization.slice("bearer ".length));
         finish(result);
       });
-      request.on("error", () => finish({ kind: "retry", reason: "network_error" }));
+      const discardConnection = () => {
+        if (sessions.get(origin) === session) sessions.delete(origin);
+        session.destroy();
+      };
+      request.on("error", () => {
+        discardConnection();
+        finish({ kind: "retry", reason: "network_error" });
+      });
+      request.on("close", () => {
+        if (!settled) {
+          discardConnection();
+          finish({ kind: "retry", reason: "connection_closed" });
+        }
+      });
       request.end(body);
     });
   }
