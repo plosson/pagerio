@@ -1,1 +1,11 @@
+.DS_Store
+*.p8
+server/node_modules/
+server/.env
 server/secrets.env
+server/data/
+apple/PocketPager.xcodeproj/
+apple/Config/Local.xcconfig
+apple/PagerKit/.build/
+apple/build/
+xcuserdata/
