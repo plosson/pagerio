@@ -17,6 +17,9 @@ settings:
 packages:
   PagerKit:
     path: PagerKit
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    majorVersion: 9.0.0
 targets:
   PocketPager-iOS:
     type: application
@@ -26,6 +29,7 @@ targets:
       - Shared
     dependencies:
       - package: PagerKit
+      - package: GoogleSignIn
     info:
       path: iOSApp/Info.plist
       properties:
@@ -33,6 +37,10 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes: [remote-notification]
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
+        GIDClientID: $(GOOGLE_CLIENT_ID_IOS)
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID_IOS)]
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: iOSApp/PocketPager-iOS.entitlements
       properties:
