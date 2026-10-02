@@ -7,7 +7,7 @@ struct MenuPanel: View {
     let services: AppServices
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openURL) private var openURL
-    @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var loginItemRefresh = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -40,11 +40,11 @@ struct MenuPanel: View {
                     Text(error).font(.caption).foregroundStyle(.red)
                 }
                 Divider()
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        LoginItem.set(enabled)
-                        launchAtLogin = LoginItem.isEnabled
-                    }
+                Toggle("Launch at login", isOn: Binding(
+                    get: { LoginItem.isEnabled },
+                    set: { LoginItem.set($0); loginItemRefresh += 1 }
+                ))
+                .id(loginItemRefresh)
                 HStack {
                     Button("Open dashboard") { openURL(services.dashboardURL) }
                     Spacer()
@@ -67,6 +67,9 @@ struct MenuPanel: View {
         }
         .padding(14)
         .frame(width: 340)
-        .task { await services.refreshAll() }
+        .task {
+            loginItemRefresh += 1 // re-read the system's login item state each time the panel opens
+            await services.refreshAll()
+        }
     }
 }
