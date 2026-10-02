@@ -9,7 +9,9 @@ struct PocketPagerMacApp: App {
         MenuBarExtra {
             MenuPanel(services: appDelegate.services)
         } label: {
-            Image(systemName: "dot.radiowaves.left.and.right")
+            // Template image (22 pt canvas): macOS tints it for light/dark menu bars.
+            Image("PagerMenu")
+                .renderingMode(.template)
                 .accessibilityLabel("Pocket Pager")
         }
         .menuBarExtraStyle(.window)
