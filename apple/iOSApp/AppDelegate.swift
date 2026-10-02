@@ -33,7 +33,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        await services.pages.refresh()
+        if services.session.isSignedIn {
+            Task { await services.pages.refresh() }
+        }
         return [.banner, .sound, .list]
     }
 
