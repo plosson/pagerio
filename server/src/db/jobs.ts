@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { ApnsEnv, Platform } from "../config";
 
 export type JobStatus = "pending" | "sending" | "submitted" | "failed";
 
@@ -19,4 +20,85 @@ export function insertJob(db: Database, row: JobRow): void {
     `INSERT INTO delivery_jobs (id, page_id, device_id, status, attempts, next_attempt_at, apns_id, last_error, updated_at)
      VALUES ($id, $page_id, $device_id, $status, $attempts, $next_attempt_at, $apns_id, $last_error, $updated_at)`,
   ).run(row);
+}
+
+export type DeliveryContext = {
+  job_id: string;
+  attempts: number;
+  device_id: string | null;
+  apns_token: string | null;
+  apns_env: ApnsEnv | null;
+  platform: Platform | null;
+  title: string | null;
+  message: string;
+  group_key: string | null;
+  public_id: string;
+  url: string | null;
+  page_created_at: number;
+};
+
+/** Atomically moves due jobs to 'sending' so no job is sent twice in parallel. */
+export function claimDueJobs(db: Database, now: number, limit: number): JobRow[] {
+  return db
+    .query<JobRow, { now: number; limit: number }>(
+      `UPDATE delivery_jobs SET status = 'sending', updated_at = $now
+       WHERE id IN (
+         SELECT id FROM delivery_jobs WHERE status = 'pending' AND next_attempt_at <= $now
+         ORDER BY next_attempt_at, id LIMIT $limit
+       )
+       RETURNING *`,
+    )
+    .all({ now, limit });
+}
+
+export function getDeliveryContext(db: Database, jobId: string): DeliveryContext | null {
+  return (
+    db
+      .query<DeliveryContext, { jobId: string }>(
+        `SELECT j.id AS job_id, j.attempts, j.device_id, d.apns_token, d.apns_env, d.platform,
+                p.title, p.message, p.group_key, p.public_id, p.url, p.created_at AS page_created_at
+         FROM delivery_jobs j
+         JOIN pages p ON p.id = j.page_id
+         LEFT JOIN devices d ON d.id = j.device_id
+         WHERE j.id = $jobId`,
+      )
+      .get({ jobId }) ?? null
+  );
+}
+
+export function markSubmitted(db: Database, id: string, apnsId: string, at: number): void {
+  db.query("UPDATE delivery_jobs SET status = 'submitted', apns_id = $apnsId, last_error = NULL, updated_at = $at WHERE id = $id").run({
+    id,
+    apnsId,
+    at,
+  });
+}
+
+export function markFailed(db: Database, id: string, reason: string, at: number): void {
+  db.query("UPDATE delivery_jobs SET status = 'failed', last_error = $reason, updated_at = $at WHERE id = $id").run({ id, reason, at });
+}
+
+export function scheduleRetry(db: Database, id: string, attempts: number, nextAt: number, reason: string, at: number): void {
+  db.query(
+    `UPDATE delivery_jobs SET status = 'pending', attempts = $attempts, next_attempt_at = $nextAt,
+       last_error = $reason, updated_at = $at WHERE id = $id`,
+  ).run({ id, attempts, nextAt, reason, at });
+}
+
+/** On boot: jobs a previous process was sending are sent again (at-least-once). */
+export function resetSendingJobs(db: Database, at: number): number {
+  return db.query("UPDATE delivery_jobs SET status = 'pending', updated_at = $at WHERE status = 'sending'").run({ at }).changes;
+}
+
+/** Earliest moment an unfinished job became due, or null when nothing is overdue. */
+export function oldestOverdueJobAt(db: Database, now: number): number | null {
+  return (
+    db
+      .query<{ at: number | null }, { now: number }>(
+        `SELECT MIN(CASE WHEN status = 'pending' THEN next_attempt_at ELSE updated_at END) AS at
+         FROM delivery_jobs
+         WHERE (status = 'pending' AND next_attempt_at <= $now) OR status = 'sending'`,
+      )
+      .get({ now })?.at ?? null
+  );
 }

@@ -7,6 +7,7 @@ import { openDatabase } from "../src/db/database";
 import { type AccountRow, findOrCreateAccount, triggerUrl } from "../src/services/accounts";
 import { type DeviceInput, type DeviceRow, registerCurrentDevice } from "../src/services/devices";
 import { createSession, type SessionRow } from "../src/services/sessions";
+import type { ApnsMessage, ApnsResult, ApnsSender, ApnsTarget } from "../src/delivery/apns";
 
 export const T0 = Date.UTC(2026, 9, 2, 12, 0, 0);
 
@@ -63,4 +64,20 @@ export function seedDevice(
     ...overrides,
   });
   return { device, sessionToken: token, session: { ...session, device_id: device.id } };
+}
+
+export class FakeSender implements ApnsSender {
+  calls: Array<{ target: ApnsTarget; message: ApnsMessage }> = [];
+  /** Consumed in order; when empty, every send succeeds. */
+  results: ApnsResult[] = [];
+  /** Overrides `results` when set. */
+  handler: ((target: ApnsTarget, message: ApnsMessage) => Promise<ApnsResult>) | null = null;
+
+  async send(target: ApnsTarget, message: ApnsMessage): Promise<ApnsResult> {
+    this.calls.push({ target, message });
+    if (this.handler) return this.handler(target, message);
+    return this.results.shift() ?? { kind: "ok", apnsId: `apns-${this.calls.length}` };
+  }
+
+  close(): void {}
 }
