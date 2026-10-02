@@ -65,7 +65,7 @@ describe("GET /v/:publicId", () => {
   test("unknown, malformed, expired and deleted pages are a noindex 404", async () => {
     const t = testApp();
     const { page } = makePage(t);
-    for (const id of ["x".repeat(43), "short", "..%2F..%2Fetc"]) {
+    for (const id of ["x".repeat(16), "x".repeat(43), page.public_id + "x", page.public_id.slice(0, 15), page.public_id.slice(0, 15) + "-", "short", "..%2F..%2Fetc"]) {
       const res = await t.app.request(`/v/${id}`);
       expect(res.status).toBe(404);
       expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");

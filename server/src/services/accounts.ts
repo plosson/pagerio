@@ -1,4 +1,4 @@
-import { decryptSecret, encryptSecret, hashToken, isTokenShaped, newId, randomToken } from "../auth/tokens";
+import { decryptSecret, encryptSecret, hashToken, isShortTokenShaped, newId, randomShortToken } from "../auth/tokens";
 import type { Ctx } from "../context";
 import {
   type AccountRow,
@@ -23,7 +23,7 @@ export function findOrCreateAccount(ctx: Ctx, identity: Identity): AccountRow {
       if (existing.email !== identity.email) updateAccountEmail(ctx.db, existing.id, identity.email);
       return { ...existing, email: identity.email };
     }
-    const token = randomToken();
+    const token = randomShortToken();
     const row: AccountRow = {
       id: newId("acct"),
       google_sub: identity.sub,
@@ -38,7 +38,7 @@ export function findOrCreateAccount(ctx: Ctx, identity: Identity): AccountRow {
 }
 
 export function findAccountByTriggerToken(ctx: Ctx, token: string): AccountRow | null {
-  if (!isTokenShaped(token)) return null;
+  if (!isShortTokenShaped(token)) return null;
   return getAccountByTriggerHash(ctx.db, hashToken(token));
 }
 

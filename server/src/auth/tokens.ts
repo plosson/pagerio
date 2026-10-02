@@ -12,6 +12,27 @@ export function isTokenShaped(value: string): boolean {
   return TOKEN_PATTERN.test(value);
 }
 
+// Short tokens end up in URLs people copy by hand (/p/ and /v/), so they are short and purely alphanumeric
+// ('-' and '_' break double-click selection). 16 base62 chars ≈ 95 bits, ample for an online-only guess.
+const SHORT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const SHORT_TOKEN_LENGTH = 16;
+const SHORT_TOKEN_PATTERN = /^[A-Za-z0-9]{16}$/;
+
+export function randomShortToken(): string {
+  let token = "";
+  while (token.length < SHORT_TOKEN_LENGTH) {
+    for (const byte of randomBytes(SHORT_TOKEN_LENGTH)) {
+      // Reject bytes >= 248 (4 × 62) so every character is equally likely.
+      if (byte < 248 && token.length < SHORT_TOKEN_LENGTH) token += SHORT_ALPHABET[byte % 62];
+    }
+  }
+  return token;
+}
+
+export function isShortTokenShaped(value: string): boolean {
+  return SHORT_TOKEN_PATTERN.test(value);
+}
+
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }

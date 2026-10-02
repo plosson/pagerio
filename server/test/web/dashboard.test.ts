@@ -164,7 +164,7 @@ describe("recent pages", () => {
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("someone else");
-    expect(html).toMatch(/href="https:\/\/pager\.test\/v\/[A-Za-z0-9_-]{43}"/);
+    expect(html).toMatch(/href="https:\/\/pager\.test\/v\/[A-Za-z0-9]{16}"/);
   });
 
   test("a page with an empty title shows its message as the link text, without a dangling dash", async () => {

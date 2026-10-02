@@ -1,4 +1,4 @@
-import { isTokenShaped, newId, randomToken } from "../auth/tokens";
+import { isShortTokenShaped, newId, randomShortToken } from "../auth/tokens";
 import type { Config } from "../config";
 import type { Ctx } from "../context";
 import { listDevicesForAccount } from "../db/devices";
@@ -66,7 +66,7 @@ export function createPage(
 
     const page: PageRow = {
       id: newId("pg"),
-      public_id: randomToken(),
+      public_id: randomShortToken(),
       account_id: args.accountId,
       title: args.input.title,
       message: args.input.message,
@@ -111,7 +111,7 @@ export function listPagesForAccount(
 }
 
 export function findPublicPage(ctx: Ctx, publicId: string): PageRow | null {
-  if (!isTokenShaped(publicId)) return null;
+  if (!isShortTokenShaped(publicId)) return null;
   const page = getPageByPublicId(ctx.db, publicId);
   if (!page || page.created_at <= ctx.now() - PAGE_RETENTION_MS) return null;
   return page;

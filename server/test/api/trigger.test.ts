@@ -22,7 +22,7 @@ describe("POST /p/:token", () => {
     expect(res.status).toBe(202);
     const body = (await res.json()) as { id: string; status: string; view_url: string };
     expect(body.status).toBe("accepted");
-    expect(body.view_url).toMatch(/^https:\/\/pager\.test\/v\/[A-Za-z0-9_-]{43}$/);
+    expect(body.view_url).toMatch(/^https:\/\/pager\.test\/v\/[A-Za-z0-9]{16}$/);
     expect(getPageById(t.ctx.db, body.id)?.message).toBe(DEFAULT_MESSAGE);
     expect(t.wakes.count).toBe(1);
   });

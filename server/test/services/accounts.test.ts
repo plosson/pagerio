@@ -22,11 +22,11 @@ describe("findOrCreateAccount", () => {
 });
 
 describe("trigger URL", () => {
-  test("has the base URL and a 43-char token, and resolves back to the account", () => {
+  test("has the base URL and a 16-char alphanumeric token, and resolves back to the account", () => {
     const ctx = testCtx();
     const account = findOrCreateAccount(ctx, { sub: "s1", email: "a@example.com" });
     const url = triggerUrl(ctx, account.id);
-    expect(url).toMatch(/^https:\/\/pager\.test\/p\/[A-Za-z0-9_-]{43}$/);
+    expect(url).toMatch(/^https:\/\/pager\.test\/p\/[A-Za-z0-9]{16}$/);
     const token = url.split("/p/")[1]!;
     expect(findAccountByTriggerToken(ctx, token)?.id).toBe(account.id);
   });
@@ -44,7 +44,7 @@ describe("trigger URL", () => {
     const account = findOrCreateAccount(ctx, { sub: "s1", email: "a@example.com" });
     const token = triggerUrl(ctx, account.id).split("/p/")[1]!;
     const flipped = token.slice(0, -1) + (token.endsWith("A") ? "B" : "A");
-    for (const bad of [flipped, token.slice(0, 42), token + "x", "", "../../etc/passwd", "' OR 1=1 --", "x".repeat(10_000)]) {
+    for (const bad of [flipped, token.slice(0, 15), token + "x", token.toLowerCase() === token ? token.toUpperCase() : token.toLowerCase(), "a".repeat(43), "", "../../etc/passwd", "' OR 1=1 --", "x".repeat(10_000)]) {
       expect(findAccountByTriggerToken(ctx, bad)).toBeNull();
     }
   });

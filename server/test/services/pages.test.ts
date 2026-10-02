@@ -49,7 +49,7 @@ describe("createPage", () => {
     const r1 = createPage(ctx, { accountId: account.id, input: input(), source: "trigger", idempotencyKey: null });
     const r2 = createPage(ctx, { accountId: account.id, input: input(), source: "trigger", idempotencyKey: null });
     if (!r1.ok || !r2.ok) throw new Error("expected ok");
-    expect(r1.page.public_id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(r1.page.public_id).toMatch(/^[A-Za-z0-9]{16}$/);
     expect(r1.page.public_id).not.toBe(r2.page.public_id);
     expect(viewUrl(ctx.config, r1.page.public_id)).toBe(`https://pager.test/v/${r1.page.public_id}`);
   });

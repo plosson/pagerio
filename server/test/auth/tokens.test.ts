@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { constantTimeEqual, decryptSecret, encryptSecret, hashToken, isTokenShaped, newId, randomToken } from "../../src/auth/tokens";
+import {
+  constantTimeEqual,
+  decryptSecret,
+  encryptSecret,
+  hashToken,
+  isTokenShaped,
+  isShortTokenShaped,
+  newId,
+  randomToken,
+  randomShortToken,
+} from "../../src/auth/tokens";
 
 const key = Buffer.alloc(32, 3);
 
@@ -18,6 +28,49 @@ describe("randomToken", () => {
   test("isTokenShaped rejects anything else", () => {
     for (const bad of ["", "short", "a".repeat(42), "a".repeat(44), "a".repeat(42) + "/", "a".repeat(42) + "=", "../../" + "a".repeat(37)]) {
       expect(isTokenShaped(bad)).toBe(false);
+    }
+  });
+});
+
+describe("randomShortToken", () => {
+  test("is 16 alphanumeric characters (no '-' or '_') and never repeats in 2,000 draws", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const t = randomShortToken();
+      expect(t).toMatch(/^[A-Za-z0-9]{16}$/);
+      expect(isShortTokenShaped(t)).toBe(true);
+      seen.add(t);
+    }
+    expect(seen.size).toBe(2000);
+  });
+
+  test("uses every alphabet character with no visible bias", () => {
+    const counts = new Map<string, number>();
+    const draws = 5000;
+    for (let i = 0; i < draws; i++) for (const ch of randomShortToken()) counts.set(ch, (counts.get(ch) ?? 0) + 1);
+    expect(counts.size).toBe(62);
+    const expected = (draws * 16) / 62;
+    for (const n of counts.values()) {
+      expect(n).toBeGreaterThan(expected * 0.75);
+      expect(n).toBeLessThan(expected * 1.25);
+    }
+  });
+
+  test("isShortTokenShaped rejects anything else, including legacy 43-char tokens", () => {
+    for (const bad of [
+      "",
+      "a".repeat(15),
+      "a".repeat(17),
+      "a".repeat(15) + "-",
+      "a".repeat(15) + "_",
+      "a".repeat(15) + "=",
+      "a".repeat(15) + "é",
+      "../../aaaaaaaaaa",
+      " " + "a".repeat(15),
+      "a".repeat(16) + "\n",
+      randomToken(),
+    ]) {
+      expect(isShortTokenShaped(bad)).toBe(false);
     }
   });
 });
