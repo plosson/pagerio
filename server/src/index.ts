@@ -1,5 +1,11 @@
-import { createApp } from "./app";
+import { loadConfig } from "./config";
+import { startServer } from "./server";
 
-const port = Number(process.env.PORT ?? 3000);
-Bun.serve({ port, fetch: createApp().fetch });
-console.log(JSON.stringify({ event: "server_started", port }));
+const running = startServer(loadConfig());
+
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, async () => {
+    await running.stop();
+    process.exit(0);
+  });
+}

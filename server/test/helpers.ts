@@ -8,6 +8,11 @@ import { type AccountRow, findOrCreateAccount, triggerUrl } from "../src/service
 import { type DeviceInput, type DeviceRow, registerCurrentDevice } from "../src/services/devices";
 import { createSession, type SessionRow } from "../src/services/sessions";
 import type { ApnsMessage, ApnsResult, ApnsSender, ApnsTarget } from "../src/delivery/apns";
+import { FixedWindowLimiter } from "../src/api/ipLimiter";
+import { type AppDeps, createApp } from "../src/app";
+import { AuthError, type GoogleVerifier } from "../src/auth/google";
+import type { GoogleOAuthClient } from "../src/auth/googleOAuth";
+import { createLogger } from "../src/logging";
 
 export const T0 = Date.UTC(2026, 9, 2, 12, 0, 0);
 
@@ -80,4 +85,35 @@ export class FakeSender implements ApnsSender {
   }
 
   close(): void {}
+}
+
+export const fakeGoogleVerifier: GoogleVerifier = {
+  async verify(idToken) {
+    const match = /^google:([^:]+):(.+)$/.exec(idToken);
+    if (!match) throw new AuthError("invalid_id_token");
+    return { sub: match[1]!, email: match[2]! };
+  },
+};
+
+export const fakeGoogleOAuth: GoogleOAuthClient = {
+  authorizationUrl: (state) => `https://accounts.example/auth?state=${encodeURIComponent(state)}`,
+  async exchangeCode(code) {
+    if (code === "bad") throw new AuthError("code_exchange_failed");
+    return `google:${code}:${code}@example.com`;
+  },
+};
+
+export function testApp(opts: { ctx?: ReturnType<typeof testCtx>; config?: Config } = {}) {
+  const ctx = opts.ctx ?? testCtx({ config: opts.config });
+  const logLines: string[] = [];
+  const wakes = { count: 0 };
+  const deps: AppDeps = {
+    ...ctx,
+    logger: createLogger((line) => logLines.push(line)),
+    worker: { wake: () => void (wakes.count += 1) },
+    ipLimiter: new FixedWindowLimiter(ctx.config.limits.triggerRequestsPerIpPerMinute, 60_000, ctx.now),
+    google: fakeGoogleVerifier,
+    googleOAuth: fakeGoogleOAuth,
+  };
+  return { app: createApp(deps), deps, ctx, logLines, wakes };
 }
