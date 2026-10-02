@@ -11,6 +11,7 @@ import { oldestOverdueJobAt } from "./db/jobs";
 import { type Logger, requestLogger } from "./logging";
 import { webAuthRoutes } from "./web/authRoutes";
 import { dashboardRoutes } from "./web/dashboard";
+import { publicViewRoutes } from "./web/publicView";
 import { securityHeaders } from "./web/http";
 
 export interface AppDeps extends Ctx {
@@ -37,6 +38,7 @@ export function createApp(deps: AppDeps): Hono {
     const oldest = oldestOverdueJobAt(deps.db, now);
     return c.json({ ok: true, oldest_pending_ms: oldest === null ? 0 : now - oldest });
   });
+  app.route("/", publicViewRoutes(deps));
   app.route("/", triggerRoutes(deps));
   app.route("/api", appApiRoutes(deps));
   app.route("/", webAuthRoutes(deps));

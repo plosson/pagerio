@@ -1,4 +1,4 @@
-import { newId, randomToken } from "../auth/tokens";
+import { isTokenShaped, newId, randomToken } from "../auth/tokens";
 import type { Config } from "../config";
 import type { Ctx } from "../context";
 import { listDevicesForAccount } from "../db/devices";
@@ -7,6 +7,7 @@ import {
   countPagesSince,
   findRecentPageByIdempotencyKey,
   getPageById,
+  getPageByPublicId,
   insertPage,
   listPages,
   oldestPageSince,
@@ -107,4 +108,11 @@ export function listPagesForAccount(
   }
   const pages = listPages(ctx.db, accountId, { since: ctx.now() - PAGE_RETENTION_MS, before, limit: opts.limit });
   return { ok: true, pages, nextBefore: pages.length === opts.limit ? pages.at(-1)!.id : null };
+}
+
+export function findPublicPage(ctx: Ctx, publicId: string): PageRow | null {
+  if (!isTokenShaped(publicId)) return null;
+  const page = getPageByPublicId(ctx.db, publicId);
+  if (!page || page.created_at <= ctx.now() - PAGE_RETENTION_MS) return null;
+  return page;
 }
