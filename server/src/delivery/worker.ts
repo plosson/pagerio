@@ -2,6 +2,7 @@ import type { Ctx } from "../context";
 import { deleteDevice } from "../db/devices";
 import {
   claimDueJobs,
+  releaseJob,
   getDeliveryContext,
   markFailed,
   markSubmitted,
@@ -39,11 +40,22 @@ export class DeliveryWorker {
   tick(): number {
     const capacity = (this.options.maxInFlight ?? 100) - this.inFlight.size;
     if (capacity <= 0) return 0;
-    const jobs = claimDueJobs(this.deps.db, this.deps.now(), Math.min(capacity, this.options.batchSize ?? 50));
+    let jobs: ReturnType<typeof claimDueJobs>;
+    try {
+      jobs = claimDueJobs(this.deps.db, this.deps.now(), Math.min(capacity, this.options.batchSize ?? 50));
+    } catch (err) {
+      this.deps.logger.error("delivery_tick_failed", { name: err instanceof Error ? err.name : "unknown" });
+      return 0;
+    }
     for (const job of jobs) {
       const running: Promise<void> = this.deliver(job.id)
         .catch((err: unknown) => {
           this.deps.logger.error("delivery_crashed", { name: err instanceof Error ? err.name : "unknown" });
+          try {
+            releaseJob(this.deps.db, job.id, this.deps.now());
+          } catch (releaseErr) {
+            this.deps.logger.error("delivery_release_failed", { name: releaseErr instanceof Error ? releaseErr.name : "unknown" });
+          }
         })
         .finally(() => this.inFlight.delete(running));
       this.inFlight.add(running);

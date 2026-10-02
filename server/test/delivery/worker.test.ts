@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { openDatabase } from "../../src/db/database";
-import type { JobRow } from "../../src/db/jobs";
+import { type JobRow, oldestOverdueJobAt } from "../../src/db/jobs";
 import { DeliveryWorker, RETRY_DELAYS_MS } from "../../src/delivery/worker";
 import { createLogger } from "../../src/logging";
 import { resolveSession } from "../../src/services/sessions";
 import { createPage } from "../../src/services/pages";
 import type { PageInput } from "../../src/services/pageInput";
-import { FakeClock, FakeSender, seedAccount, seedDevice, tempDbPath, testConfig, testCtx } from "../helpers";
+import { T0, FakeClock, FakeSender, seedAccount, seedDevice, tempDbPath, testConfig, testCtx } from "../helpers";
 
 type Ctx = ReturnType<typeof testCtx>;
 
@@ -251,5 +251,71 @@ describe("DeliveryWorker", () => {
     await worker.idle();
     expect(logs.join("\n")).toContain('"outcome":"ok"');
     expect(logs.join("\n")).not.toContain("TOP-SECRET");
+  });
+
+  test("a failing claim query does not throw out of tick()", () => {
+    const { ctx, worker, logs } = setup();
+    ctx.db.close();
+    expect(worker.tick()).toBe(0);
+    expect(logs.join("\n")).toContain("delivery_tick_failed");
+  });
+
+  test("a database error after the send releases the job for retry instead of leaving it 'sending'", async () => {
+    const { ctx, worker, logs } = setup();
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    page(ctx, account.id, { title: "TOP-SECRET-TITLE", message: "TOP-SECRET-BODY" });
+    ctx.db.run(
+      "CREATE TRIGGER fail_submit BEFORE UPDATE OF status ON delivery_jobs WHEN NEW.status = 'submitted' BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    );
+    worker.tick();
+    await worker.idle();
+    expect(jobs(ctx)[0]).toMatchObject({ status: "pending", next_attempt_at: ctx.clock.t + 5000 });
+    expect(logs.join("\n")).toContain("delivery_crashed");
+    expect(logs.join("\n")).not.toContain("TOP-SECRET");
+  });
+
+  test("two workers on one database never claim the same job", () => {
+    const ctx = testCtx();
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    seedDevice(ctx, account.id);
+    page(ctx, account.id);
+    const a = setup(ctx);
+    const b = setup(ctx);
+    a.sender.handler = () => new Promise(() => {});
+    b.sender.handler = () => new Promise(() => {});
+    expect(a.worker.tick()).toBe(2);
+    expect(b.worker.tick()).toBe(0);
+    expect(a.sender.calls).toHaveLength(2);
+    expect(b.sender.calls).toHaveLength(0);
+  });
+});
+
+describe("oldestOverdueJobAt", () => {
+  test("null when there are no jobs", () => {
+    expect(oldestOverdueJobAt(testCtx().db, T0)).toBeNull();
+  });
+
+  test("null when the only pending job is not yet due", async () => {
+    const { ctx, sender, worker } = setup();
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    page(ctx, account.id);
+    sender.results = [{ kind: "retry", reason: "x" }];
+    worker.tick();
+    await worker.idle();
+    expect(oldestOverdueJobAt(ctx.db, ctx.clock.t)).toBeNull();
+  });
+
+  test("returns next_attempt_at for an overdue pending job and updated_at for a sending job", () => {
+    const { ctx, worker } = setup();
+    const { account } = seedAccount(ctx);
+    seedDevice(ctx, account.id);
+    const p = page(ctx, account.id);
+    ctx.clock.advance(1000);
+    expect(oldestOverdueJobAt(ctx.db, ctx.clock.t)).toBe(p.created_at);
+    worker.tick();
+    expect(oldestOverdueJobAt(ctx.db, ctx.clock.t)).toBe(ctx.clock.t);
   });
 });
