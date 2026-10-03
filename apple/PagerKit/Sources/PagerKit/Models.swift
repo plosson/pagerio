@@ -1,5 +1,20 @@
 import Foundation
 
+/// How many device pushes APNs accepted, are still queued, or gave up. Never "delivered".
+public struct Delivery: Decodable, Equatable, Sendable {
+    public let sent: Int
+    public let sending: Int
+    public let failed: Int
+
+    public static let none = Delivery(sent: 0, sending: 0, failed: 0)
+
+    public init(sent: Int, sending: Int, failed: Int) {
+        self.sent = sent
+        self.sending = sending
+        self.failed = failed
+    }
+}
+
 public struct PageSummary: Decodable, Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String?
@@ -8,11 +23,12 @@ public struct PageSummary: Decodable, Identifiable, Equatable, Sendable {
     public let viewURL: URL
     public let source: String
     public let createdAt: Date
+    public let delivery: Delivery
 
     public var headline: String { title ?? message }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, message, url, source
+        case id, title, message, url, source, delivery
         case viewURL = "view_url"
         case createdAt = "created_at"
     }
@@ -27,15 +43,20 @@ public struct PageSummary: Decodable, Identifiable, Equatable, Sendable {
         viewURL = try container.decode(URL.self, forKey: .viewURL)
         source = try container.decode(String.self, forKey: .source)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        // Older servers don't send delivery; a malformed summary must not hide the page either.
+        delivery = (try? container.decodeIfPresent(Delivery.self, forKey: .delivery)) ?? .none
     }
 }
 
 public struct PagesResponse: Decodable, Sendable {
     public let pages: [PageSummary]
     public let nextBefore: String?
+    /// Pages kept in the last 30 days, and devices that ring. Nil from an older server.
+    public let total: Int?
+    public let devices: Int?
 
     enum CodingKeys: String, CodingKey {
-        case pages
+        case pages, total, devices
         case nextBefore = "next_before"
     }
 }

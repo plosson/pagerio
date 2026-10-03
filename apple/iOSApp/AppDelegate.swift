@@ -7,7 +7,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
     let services = AppServices(
         baseURL: AppServices.baseURL(),
         environment: .current,
-        store: KeychainStore(service: "com.chuut.pagerio")
+        store: KeychainStore(service: "com.chuut.pagerio"),
+        requestRemoteNotifications: { UIApplication.shared.registerForRemoteNotifications() }
     )
 
     func application(
@@ -18,7 +19,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         center.delegate = self
         center.setNotificationCategories(NotificationRoute.categories())
         application.registerForRemoteNotifications()
+        #if DEBUG
+        Task { await NotificationDiagnostics.runIfRequested(services: services) }
+        #endif
         return true
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        application.registerForRemoteNotifications()
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
@@ -26,7 +34,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
-        print("APNs registration failed: \(error.localizedDescription)")
+        services.registrar.didFailToReceiveToken(error)
     }
 
     func userNotificationCenter(

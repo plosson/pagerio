@@ -12,25 +12,29 @@ struct SignInWindow: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 44))
-                .foregroundStyle(.tint)
+            Image("Logo")
+                .resizable()
+                .frame(width: 88, height: 88)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Theme.orange.opacity(0.3), radius: 14, y: 6)
                 .accessibilityHidden(true)
             Text("Pocket Pager").font(.title.bold())
-            Text("Sign in to get paged on this Mac.")
+            Text("Get paged on this Mac when your scripts and agents need you.")
+                .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+            PagerDisplay(label: "How it works", title: "curl -d \"Build finished\"", message: "your-url → this Mac rings")
             if let error {
                 Text(error)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.bad)
                     .multilineTextAlignment(.center)
             }
-            Button("Sign in with Google") { Task { await signIn() } }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            Button(isWorking ? "Signing in…" : "Sign in with Google") { Task { await signIn() } }
+                .buttonStyle(SecondaryButtonStyle(strong: true))
                 .disabled(isWorking)
         }
         .padding(32)
-        .frame(width: 360)
+        .frame(width: 380)
+        .background(Theme.background)
         .onAppear { NSApp.activate() }
     }
 

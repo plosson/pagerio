@@ -41,6 +41,13 @@ install_mac() {
   pkill -f "Pocket Pager.app/Contents/MacOS/Pocket Pager" 2>/dev/null || true
   rm -rf "$target"
   ditto "$source" "$target"
+  # ditto preserves the old bundle-directory timestamp even when its resources changed.
+  # Mark the installed bundle as updated before Launch Services refreshes its icon metadata.
+  touch "$target"
+  # Keep Launch Services pointed at the installed copy rather than a derived-data build.
+  local lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  "$lsregister" -u "$source" >/dev/null 2>&1 || true
+  "$lsregister" -f "$target"
   open "$target"
   echo "✓ Mac app installed in /Applications and launched"
 }

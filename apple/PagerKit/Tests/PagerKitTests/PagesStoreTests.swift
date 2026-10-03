@@ -103,5 +103,100 @@ extension Network {
             #expect(store.pages.map(\.id) == ["pg_1"])
             #expect(!store.isLoading)
         }
-    }
+    
+        // MARK: Load more, totals and offline
+
+        nonisolated static func list(_ ids: [String], next: String?, total: Int? = nil, devices: Int? = nil) -> String {
+            let pages = ids.enumerated().map { i, id in pageJSON(id, title: "T\(id)", at: t0.addingTimeInterval(-Double(i) * 3600)) }
+            let extras = (total.map { #","total":\#($0)"# } ?? "") + (devices.map { #","devices":\#($0)"# } ?? "")
+            return #"{"pages":[\#(pages.joined(separator: ","))],"next_before":\#(next.map { "\"\($0)\"" } ?? "null")\#(extras)}"#
+        }
+
+        @Test func loadMoreFollowsTheCursorAndStopsAtTheEnd() async {
+            StubURLProtocol.reset { request in
+                let before = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems?.first { $0.name == "before" }?.value
+                return before == nil
+                    ? StubURLProtocol.json(200, Self.list(["a", "b"], next: "b", total: 3, devices: 2))
+                    : StubURLProtocol.json(200, Self.list(["c"], next: nil))
+            }
+            let store = PagesStore(api: api)
+            await store.refresh()
+            #expect(store.hasMore)
+            #expect(store.total == 3)
+            #expect(store.devices == 2)
+            await store.loadMore()
+            #expect(store.pages.map(\.id) == ["a", "b", "c"])
+            #expect(!store.hasMore)
+            await store.loadMore()
+            #expect(StubURLProtocol.requests.count == 2)
+        }
+
+        @Test func loadMoreNeverDuplicatesAPageThatShiftedAcrossTheCursor() async {
+            StubURLProtocol.reset { request in
+                request.url!.query!.contains("before")
+                    ? StubURLProtocol.json(200, Self.list(["b", "c"], next: nil))
+                    : StubURLProtocol.json(200, Self.list(["a", "b"], next: "b"))
+            }
+            let store = PagesStore(api: api)
+            await store.refresh()
+            await store.loadMore()
+            #expect(store.pages.map(\.id) == ["a", "b", "c"])
+        }
+
+        @Test func aRefreshKeepsPagesLoadedWithLoadMoreBelowTheNewOnes() {
+            let old = ["b", "c", "d", "e"].map { try! makePage($0) }
+            let fresh = ["a", "b"].map { try! makePage($0) }
+            let (merged, next) = PagesStore.merge(fresh: fresh, freshNext: "b", old: old, oldNext: "e")
+            #expect(merged.map(\.id) == ["a", "b", "c", "d", "e"])
+            #expect(next == "e")
+        }
+
+        @Test func aRefreshThatNoLongerOverlapsOrFitsOnOnePageReplacesTheList() {
+            let old = ["x", "y"].map { try! makePage($0) }
+            let fresh = ["a", "b"].map { try! makePage($0) }
+            #expect(PagesStore.merge(fresh: fresh, freshNext: "b", old: old, oldNext: "y").0.map(\.id) == ["a", "b"])
+            #expect(PagesStore.merge(fresh: fresh, freshNext: nil, old: ["a", "b", "z"].map { try! makePage($0) }, oldNext: "z").0.map(\.id) == ["a", "b"])
+            #expect(PagesStore.merge(fresh: [], freshNext: nil, old: old, oldNext: nil).0.isEmpty)
+        }
+
+        @Test func offlineKeepsCachedPagesAndWhenTheyWereLoaded() async throws {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, Self.list(["a"], next: nil)) }
+            let store = PagesStore(api: api)
+            await store.refresh()
+            let loadedAt = try #require(store.loadedAt)
+            StubURLProtocol.reset { _ in StubURLProtocol.offline }
+            await store.refresh()
+            #expect(store.isOffline)
+            #expect(store.pages.map(\.id) == ["a"])
+            #expect(store.loadedAt == loadedAt)
+            StubURLProtocol.reset { _ in StubURLProtocol.json(500, "{}") }
+            await store.refresh()
+            #expect(!store.isOffline)
+        }
+
+        @Test func aLoadMoreFinishingAfterResetIsDropped() async {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, Self.list(["a"], next: "a")) }
+            let store = PagesStore(api: api)
+            await store.refresh()
+            let gate = Gate()
+            StubURLProtocol.reset { _ in gate.semaphore.wait(); return StubURLProtocol.json(200, Self.list(["old"], next: nil)) }
+            let inFlight = Task { await store.loadMore() }
+            await waitForRequests(1)
+            store.reset()
+            gate.release()
+            await inFlight.value
+            #expect(store.pages.isEmpty)
+            #expect(store.total == nil)
+            #expect(!store.hasMore)
+        }
+
+        @Test func anOlderServerWithoutTotalsStillWorks() async {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, onePage) }
+            let store = PagesStore(api: api)
+            await store.refresh()
+            #expect(store.total == nil)
+            #expect(store.devices == nil)
+            #expect(store.pages.first?.delivery == Delivery.none)
+        }
+}
 }

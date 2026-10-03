@@ -10,8 +10,10 @@ public final class AppServices {
     public let permission: NotificationPermission
     public let registrar: DeviceRegistrar
     public let dashboardURL: URL
+    private let requestRemoteNotifications: @MainActor () -> Void
 
-    public init(baseURL: URL, environment: ApnsEnvironment, store: any SecretStore, urlSession: URLSession = .shared) {
+    public init(baseURL: URL, environment: ApnsEnvironment, store: any SecretStore, urlSession: URLSession = .shared, requestRemoteNotifications: @escaping @MainActor () -> Void = {}) {
+        self.requestRemoteNotifications = requestRemoteNotifications
         let session = SessionController(store: store)
         let relay = UnauthorizedRelay()
         let api = APIClient(
@@ -49,8 +51,13 @@ public final class AppServices {
 
     /// On launch, on foreground, on wake and when the menu-bar panel opens.
     public func refreshAll() async {
+        if registrar.latestToken == nil || registrar.lastError != nil { requestRemoteNotifications() }
         await permission.refresh()
-        if session.isSignedIn { await pages.refresh() }
+        if session.isSignedIn {
+            if permission.status == .unknown { await permission.request() }
+            await registrar.registerIfPossible()
+            await pages.refresh()
+        }
     }
 
     public nonisolated static func baseURL(bundle: Bundle = .main) -> URL {

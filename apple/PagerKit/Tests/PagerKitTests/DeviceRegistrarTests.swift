@@ -33,14 +33,40 @@ extension Network {
             #expect(try StubURLProtocol.requests.map { try jsonBody($0)["apns_token"] } == ["01", "02"])
         }
 
+        @Test func aTokenChangeDuringRegistrationFinishesWithTheLatestToken() async throws {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, #"{"id":"d"}"#) }
+            let registrar = DeviceRegistrar(api: api, environment: .sandbox, isSignedIn: { true })
+            let first = Task { await registrar.didReceive(token: Data([0x01])) }
+            // Wait until the first request is in flight before delivering the changed token.
+            while StubURLProtocol.requests.isEmpty { await Task.yield() }
+            await registrar.didReceive(token: Data([0x02]))
+            await first.value
+            #expect(try jsonBody(#require(StubURLProtocol.requests.last))["apns_token"] == "02")
+            #expect(registrar.isRegistered)
+        }
+
+        @Test func appleRegistrationFailureIsVisibleAndRecoversWithANewToken() async {
+            StubURLProtocol.reset { _ in StubURLProtocol.json(200, #"{"id":"d"}"#) }
+            let registrar = DeviceRegistrar(api: api, environment: .sandbox, isSignedIn: { true })
+            #expect(!registrar.isRegistered)
+            registrar.didFailToReceiveToken(URLError(.notConnectedToInternet))
+            #expect(registrar.lastError != nil)
+            #expect(!registrar.isRegistered)
+            await registrar.didReceive(token: Data([0x01]))
+            #expect(registrar.isRegistered)
+            #expect(registrar.lastError == nil)
+        }
+
         @Test func aFailureIsRecordedAndARetrySucceeds() async {
             StubURLProtocol.reset { _ in StubURLProtocol.offline }
             let registrar = DeviceRegistrar(api: api, environment: .sandbox, isSignedIn: { true })
             await registrar.didReceive(token: Data([0x01]))
             #expect(registrar.lastError != nil)
+            #expect(!registrar.isRegistered)
             StubURLProtocol.reset { _ in StubURLProtocol.json(200, #"{"id":"d"}"#) }
             await registrar.registerIfPossible()
             #expect(registrar.lastError == nil)
+            #expect(registrar.isRegistered)
         }
     }
 }

@@ -8,7 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     let services = AppServices(
         baseURL: AppServices.baseURL(),
         environment: .current,
-        store: KeychainStore(service: "com.chuut.pagerio.mac")
+        store: KeychainStore(service: "com.chuut.pagerio.mac"),
+        requestRemoteNotifications: { NSApplication.shared.registerForRemoteNotifications() }
     )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -17,8 +18,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         center.setNotificationCategories(NotificationRoute.categories())
         NSApplication.shared.registerForRemoteNotifications()
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [services] _ in
-            Task { @MainActor in await services.refreshAll() }
+            Task { @MainActor in
+                NSApplication.shared.registerForRemoteNotifications()
+                await services.refreshAll()
+            }
         }
+        Task {
+            await services.refreshAll()
+            #if DEBUG
+            await NotificationDiagnostics.runIfRequested(services: services)
+            #endif
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        NSApplication.shared.registerForRemoteNotifications()
         Task { await services.refreshAll() }
     }
 
@@ -27,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
     }
 
     func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
-        print("APNs registration failed: \(error.localizedDescription)")
+        services.registrar.didFailToReceiveToken(error)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

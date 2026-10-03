@@ -44,4 +44,22 @@ import UserNotifications
         #expect(NotificationPermission.status(for: .denied) == .off)
         #expect(NotificationPermission.status(for: .notDetermined) == .unknown)
     }
+
+    @Test func soundAndBannerSwitchesAreReportedSeparately() {
+        #expect(NotificationPermission.limits(sound: .enabled, alertStyle: .banner).isEmpty)
+        #expect(NotificationPermission.limits(sound: .enabled, alertStyle: .alert).isEmpty)
+        #expect(NotificationPermission.limits(sound: .disabled, alertStyle: .banner) == [.soundOff])
+        #expect(NotificationPermission.limits(sound: .enabled, alertStyle: .none) == [.bannersOff])
+        #expect(NotificationPermission.limits(sound: .disabled, alertStyle: .none) == [.soundOff, .bannersOff])
+        // "Not supported" (no sound setting on this device) is not a problem the user can fix.
+        #expect(NotificationPermission.limits(sound: .notSupported, alertStyle: .banner).isEmpty)
+    }
+
+    @Test func askingAgainOnlyPromptsWhenTheSystemStillAllowsIt() {
+        #expect(NotificationPermission.askAgainResult(for: .notDetermined) == .prompted)
+        // Once decided, the system never shows the prompt again: Settings is the only way back.
+        for decided: UNAuthorizationStatus in [.denied, .authorized, .provisional] {
+            #expect(NotificationPermission.askAgainResult(for: decided) == .openSettings)
+        }
+    }
 }
