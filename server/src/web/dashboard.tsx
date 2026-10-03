@@ -138,7 +138,7 @@ function Dashboard(props: {
         <section aria-label="Your pager">
           <p class="display">
             <span class="label">Your pager</span>
-            <code class="text" id="pager-url">
+            <code class="text fit" id="pager-url">
               {props.url}
             </code>
           </p>

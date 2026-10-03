@@ -110,6 +110,9 @@ button:focus-visible, .button:focus-visible, a:focus-visible { outline: 3px soli
 .display { background: var(--display-bg); color: var(--display-fg); border-radius: var(--radius); padding: var(--s2) var(--s3); box-shadow: inset 0 0 0 1px var(--display-edge); font-family: var(--mono); margin: 0; }
 .display .label { display: block; color: var(--display-label); font: 700 0.8125rem/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
 .display .text { display: block; margin: 0; font: 1.1875rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+/* .fit shrinks a one-line value to the box width; app.js sets --chars. Monospace glyphs are about 0.6em wide; below 0.75rem it wraps instead. */
+.display:has(> .fit) { container-type: inline-size; }
+.display .text.fit { font-size: max(0.75rem, min(1.1875rem, 100cqi / (var(--chars, 1) * 0.61))); }
 .note { color: var(--muted); margin: var(--s1) 0 0; }
 
 /* Status lines and messages */
