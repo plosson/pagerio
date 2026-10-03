@@ -4,6 +4,7 @@ import { getAccountByGoogleSub } from "../../src/db/accounts";
 import { triggerUrl } from "../../src/services/accounts";
 import { createPage } from "../../src/services/pages";
 import { createSession } from "../../src/services/sessions";
+import { APP_VERSION } from "../../src/version";
 import { CSP } from "../../src/web/http";
 import type { PageInput } from "../../src/services/pageInput";
 import { seedAccount, seedDevice, testApp, testConfig } from "../helpers";
@@ -52,6 +53,18 @@ describe("signed out", () => {
     const t = testApp();
     expect((await t.app.request("/static/app.js")).status).toBe(200);
     expect((await t.app.request("/static/style.css")).status).toBe(200);
+  });
+
+  // Cloudflare caches /static: an unversioned link would keep serving the previous release's CSS.
+  test("every asset link on the page carries the release version and is served", async () => {
+    const t = testApp();
+    const html = await (await t.app.request("/")).text();
+    const links = [...html.matchAll(/(?:href|src)="(\/static\/[^"]*)"/g)].map((m) => String(m[1]));
+    expect(links.length).toBeGreaterThanOrEqual(4);
+    for (const link of links) {
+      expect(link).toEndWith(`?v=${APP_VERSION}`);
+      expect((await t.app.request(link)).status).toBe(200);
+    }
   });
 });
 

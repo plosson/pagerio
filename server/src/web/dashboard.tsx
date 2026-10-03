@@ -4,7 +4,7 @@ import { getAccount, triggerUrl } from "../services/accounts";
 import { listDevices } from "../services/devices";
 import { countRetainedPages, createPage, type DeliveryCounts, deliveryFor, listPagesForAccount, type PageRow, TEST_PAGE_INPUT, viewUrl } from "../services/pages";
 import { renderHtml } from "./http";
-import { Brand, Layout, MessagePage } from "./layout";
+import { asset, Brand, Layout, MessagePage } from "./layout";
 import { deliveryStatus, devicesLine, groupBursts, NEW_PAGE_MS, type PageGroup, relativeTime } from "./pageList";
 import { currentWebSession, hasValidCsrf } from "./session";
 
@@ -12,7 +12,7 @@ function SignedOut(props: { baseUrl: string }) {
   return (
     <Layout title="Pocket Pager">
       <section class="welcome">
-        <img class="logo" src="/static/icon.png" alt="Pocket Pager" width="112" height="112" />
+        <img class="logo" src={asset("icon.png")} alt="Pocket Pager" width="112" height="112" />
         <h1>Your personal pager.</h1>
         <p class="lede">One private URL. Call it from any script, and your iPhone and Mac ring.</p>
         <p class="display">
