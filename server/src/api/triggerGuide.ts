@@ -1,75 +1,39 @@
 import type { Limits } from "../config";
 import { DEFAULT_MESSAGE, LIMITS } from "../services/pageInput";
 
-/** Markdown served on GET /p/:token, so an agent that curls a pager URL learns how to use it. */
+/** Markdown served on GET /p/:token, so an agent that curls a pager URL learns how to use it. Plain language (ISO 24495-1). */
 export function triggerGuideMarkdown(url: string, limits: Limits): string {
-  return `# Pocket Pager: how to use this pager URL
+  return `# Pocket Pager
 
-This URL sends a push notification (a "page") to the phone and Mac of the person who owns it.
+This URL sends a notification to the iPhone and Mac of the person who owns it.
 
-- Send a page with **POST**. A GET (like this one) never sends anything. It only shows this guide.
-- No authentication is needed. The URL is the secret, so do not publish it.
-- Each successful POST sends one notification right away.
+## Send a notification
 
-Pager URL:
-
-\`\`\`
-${url}
-\`\`\`
-
-## 1. Simplest page: an empty POST
-
-The notification says: ${DEFAULT_MESSAGE}
-
-\`\`\`sh
-curl -X POST ${url}
-\`\`\`
-
-## 2. Plain-text message
-
-Any body that is not JSON becomes the message. The text is trimmed.
-
-\`\`\`sh
-curl -d "Your deployment is ready" ${url}
-\`\`\`
-
-## 3. JSON page with all fields
-
-Send \`Content-Type: application/json\` with a JSON object. All fields are optional. Unknown fields are ignored.
+Send a POST request. A GET request, like this one, only shows this guide.
 
 \`\`\`sh
 curl ${url} \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "title": "Build finished",
-    "message": "main is green. Ready for review.",
-    "details": "## Summary\\n\\n- 412 tests passed\\n- Coverage: 87%",
-    "url": "https://ci.example.com/builds/1234",
-    "group": "ci"
-  }'
+  -d '{"title":"Build finished","message":"All 412 tests passed."}'
 \`\`\`
 
-| Field | Max length | Format | Where it shows |
-|---|---|---|---|
-| \`title\` | ${LIMITS.title} characters | Plain text | Notification title and page view |
-| \`message\` | ${LIMITS.message} characters | Plain text | Notification body (cut off when long) and page view. Defaults to "${DEFAULT_MESSAGE}" |
-| \`details\` | ${LIMITS.details.toLocaleString("en-US")} characters | Markdown | Page view only (not in the notification) |
-| \`url\` | ${LIMITS.url} characters | Absolute \`http\` or \`https\` URL | **Open link** action on the notification and button on the page view |
-| \`group\` | ${LIMITS.group} characters | Plain text | Groups related notifications together on the device |
+The person gets the notification within seconds. You don't need a password or a key: the URL is the secret, so don't publish it.
 
-Use \`message\` for the short thing the person must know now. Put logs, lists and longer context in \`details\`.
+## Fields
 
-## 4. More examples
+All fields are optional. The server ignores fields it doesn't know.
 
-Long-running task finished, with a link:
+| Field | What it is | Maximum |
+|---|---|---|
+| \`title\` | Notification title | ${LIMITS.title} characters |
+| \`message\` | Notification text. Keep it short: the person reads it on a lock screen. If you leave it out, the text is "${DEFAULT_MESSAGE}" | ${LIMITS.message} characters |
+| \`details\` | Longer text in Markdown, such as logs or lists. It shows only when the person opens the page, not in the notification. | ${LIMITS.details.toLocaleString("en-US")} characters |
+| \`url\` | A link the person can open from the notification. It must start with \`http://\` or \`https://\`. | ${LIMITS.url} characters |
+| \`group\` | A name that groups related notifications on the device, such as \`ci\` or \`backups\` | ${LIMITS.group} characters |
 
-\`\`\`sh
-curl ${url} \\
-  -H "Content-Type: application/json" \\
-  -d '{"title":"Data export done","message":"export-2026.csv is ready (1.2 GB).","url":"https://example.com/exports/42"}'
-\`\`\`
+## Examples
 
-Asking the person for input (an agent that is blocked):
+You need the person's input:
 
 \`\`\`sh
 curl ${url} \\
@@ -77,15 +41,29 @@ curl ${url} \\
   -d '{"title":"Agent needs your input","message":"Should I run the database migration on production?","group":"agent"}'
 \`\`\`
 
-Failure with details in Markdown:
+Something failed, with details and a link:
 
 \`\`\`sh
 curl ${url} \\
   -H "Content-Type: application/json" \\
-  -d '{"title":"Nightly backup failed","message":"Disk full on db-1.","details":"**Error:** No space left on device\\n\\n- Free space: 0 B\\n- Last success: 2 days ago","group":"backups"}'
+  -d '{"title":"Nightly backup failed","message":"Disk full on db-1.","details":"**Error:** No space left on device\\n\\n- Free space: 0 B\\n- Last success: 2 days ago","url":"https://example.com/backups/db-1","group":"backups"}'
 \`\`\`
 
-Safe retries: send the same \`Idempotency-Key\` header (max ${LIMITS.idempotencyKey} characters). Within 24 hours, a retry with the same key returns the first page instead of sending a new one.
+Without JSON, the body text becomes the message:
+
+\`\`\`sh
+curl -d "Your deployment is ready" ${url}
+\`\`\`
+
+With no body at all, the message is "${DEFAULT_MESSAGE}":
+
+\`\`\`sh
+curl -X POST ${url}
+\`\`\`
+
+## Retry without sending twice
+
+Add an \`Idempotency-Key\` header (at most ${LIMITS.idempotencyKey} characters). If you send the same key again within 24 hours, the server returns the first notification and doesn't send a new one.
 
 \`\`\`sh
 curl ${url} \\
@@ -93,30 +71,30 @@ curl ${url} \\
   -d "Deploy 42 is live"
 \`\`\`
 
-## 5. Responses
+## Server responses
 
-Success is \`202 Accepted\`:
+If it works, the server answers \`202\`:
 
 \`\`\`json
 { "id": "...", "status": "accepted", "view_url": "https://.../v/..." }
 \`\`\`
 
-\`view_url\` is a web page that shows the full page, including \`details\`.
+\`view_url\` is a web page that shows the whole notification, including \`details\`.
 
-Errors have the shape \`{"error": {"code": "...", "message": "..."}}\`:
+If it fails, the server answers \`{"error": {"code": "...", "message": "..."}}\`:
 
-| Status | Code | Meaning and what to do |
+| Status | Code | What to do |
 |---|---|---|
-| 400 | \`invalid_input\` | The body is not valid. Read \`message\`, fix the field and send again. |
-| 404 | \`not_found\` | This pager URL does not exist or was regenerated. Ask the owner for the current URL. |
+| 400 | \`invalid_input\` | Read \`message\`, fix the field it names and send again. |
+| 404 | \`not_found\` | This URL doesn't exist. Ask the owner for their current URL. |
 | 413 | \`payload_too_large\` | The body is over ${LIMITS.bodyBytes.toLocaleString("en-US")} bytes. Shorten \`details\`. |
-| 429 | \`rate_limited\` | Too many pages. Wait for the number of seconds in the \`Retry-After\` header. |
-| 500 | \`internal\` | Server failure. Retry later. |
+| 429 | \`rate_limited\` | Too many notifications. Wait the number of seconds in the \`Retry-After\` header, then send again. |
+| 500 | \`internal\` | The server failed. Try again later. |
 
-## 6. Limits
+## Rules
 
-- At most ${limits.pagesPerMinute} pages per minute and ${limits.pagesPerDay} pages per day for this pager.
-- Maximum body size: ${LIMITS.bodyBytes.toLocaleString("en-US")} bytes. The body must be UTF-8.
-- Page only when a person needs to know or act. Do not send one page per log line.
+- Send a notification only when the person needs to know something or act. Don't send one for every log line.
+- You can send at most ${limits.pagesPerMinute} notifications per minute and ${limits.pagesPerDay} per day.
+- The body must be UTF-8 text of at most ${LIMITS.bodyBytes.toLocaleString("en-US")} bytes.
 `;
 }

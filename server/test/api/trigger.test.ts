@@ -102,10 +102,24 @@ describe("POST /p/:token", () => {
     const { triggerToken } = seedAccount(t.ctx);
     const text = await (await t.app.request(`/p/${triggerToken}`)).text();
     const bodies = [...text.matchAll(/-H "Content-Type: application\/json" \\\n\s+-d '([^']+)'/g)].map((m) => m[1]!);
-    expect(bodies.length).toBeGreaterThanOrEqual(4);
+    expect(bodies.length).toBeGreaterThanOrEqual(3);
     for (const body of bodies) {
       const res = await post(t.app, triggerToken, { headers: { "content-type": "application/json" }, body });
       expect(res.status).toBe(202);
+    }
+  });
+
+  test("every maximum in the guide's field table is the real limit: at the maximum is accepted, one more is refused", async () => {
+    const t = testApp();
+    const { triggerToken } = seedAccount(t.ctx);
+    const text = await (await t.app.request(`/p/${triggerToken}`)).text();
+    const rows = [...text.matchAll(/^\| `(\w+)` \|.*\| ([\d,]+) characters \|$/gm)].map((m) => ({ field: m[1]!, max: Number(m[2]!.replaceAll(",", "")) }));
+    expect(rows.map((r) => r.field)).toEqual(["title", "message", "details", "url", "group"]);
+    const value = (field: string, length: number) => (field === "url" ? "https://e.test/" + "a".repeat(length - 15) : "a".repeat(length));
+    for (const { field, max } of rows) {
+      const send = (length: number) => post(t.app, triggerToken, { headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: value(field, length) }) });
+      expect([field, (await send(max)).status]).toEqual([field, 202]);
+      expect([field, (await send(max + 1)).status]).toEqual([field, 400]);
     }
   });
 
