@@ -31,6 +31,10 @@ function localTime(date) {
 
 document.addEventListener("DOMContentLoaded", () => {
   openHow();
+  // .fit text shrinks to one line; the CSS needs its length (the CSP blocks inline styles).
+  for (const el of document.querySelectorAll(".fit")) {
+    el.style.setProperty("--chars", el.textContent.trim().length);
+  }
   for (const el of document.querySelectorAll("time[data-local]")) {
     el.textContent = localTime(new Date(el.dateTime));
   }
