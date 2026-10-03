@@ -5,7 +5,8 @@ import { triggerUrl } from "../../src/services/accounts";
 import { createPage } from "../../src/services/pages";
 import { createSession } from "../../src/services/sessions";
 import { CSP } from "../../src/web/http";
-import { seedAccount, testApp } from "../helpers";
+import type { PageInput } from "../../src/services/pageInput";
+import { seedAccount, seedDevice, testApp, testConfig } from "../helpers";
 
 function cookieFrom(res: Response, name: string): string | null {
   for (const header of res.headers.getSetCookie()) {
@@ -179,8 +180,149 @@ describe("recent pages", () => {
     });
     if (!r.ok) throw new Error("rate limited");
     const html = await (await home(t.app, session!)).text();
-    expect(html).toContain("<strong>EMPTY-TITLE-MSG</strong>");
-    expect(html).not.toContain("<strong></strong>");
+    expect(html).toContain('<span class="row-title sender" dir="auto">EMPTY-TITLE-MSG</span>');
+    expect(html).not.toContain('<span class="row-title sender" dir="auto"></span>');
+    expect(html).not.toContain('class="row-message');
     expect(html).not.toContain("— EMPTY-TITLE-MSG");
+  });
+});
+
+describe("dashboard layout and stress", () => {
+  const roomy = testConfig({ limits: { pagesPerMinute: 5000, pagesPerDay: 5000, triggerRequestsPerIpPerMinute: 30 } });
+
+  async function setup() {
+    const t = testApp({ config: roomy });
+    const { session } = await signIn(t.app);
+    const account = getAccountByGoogleSub(t.ctx.db, "user1")!;
+    const add = (input: Partial<PageInput> = {}) => {
+      const r = createPage(t.ctx, { accountId: account.id, input: { title: null, message: "m", details: null, url: null, group: null, ...input }, source: "trigger", idempotencyKey: null });
+      if (!r.ok) throw new Error("rate limited");
+      return r.page;
+    };
+    return { t, session: session!, account, add, html: async (q = "") => (await t.app.request(`/${q}`, { headers: { cookie: `pp_session=${session}` } })).text() };
+  }
+
+  test("the pager URL and Copy come before Test my pager, the curl guide and the recent pages; curl is folded", async () => {
+    const { t, account, html } = await setup();
+    const page = await html();
+    const order = [triggerUrl(t.ctx, account.id), 'data-copy="pager-url"', "Test my pager", "<details", "Recent pages"].map((s) => page.indexOf(s));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(page).toMatch(/<details id="how"><summary>How to send a page<\/summary><pre><code>curl -X POST/);
+  });
+
+  test("never uses inline styles or inline scripts, which the CSP would block", async () => {
+    const { add, html } = await setup();
+    add({ title: "x" });
+    const page = await html();
+    expect(page).not.toMatch(/\sstyle=/);
+    expect(page).not.toMatch(/<script(?![^>]*\ssrc=)[^>]*>/);
+    expect(page).not.toMatch(/\son[a-z]+=/);
+  });
+
+  test("37 identical pages from a looping script show as one row with ×37 and a counted failure", async () => {
+    const { t, add, html } = await setup();
+    seedDevice(t.ctx, getAccountByGoogleSub(t.ctx.db, "user1")!.id);
+    add({ title: "Calm", message: "before" });
+    t.ctx.clock.advance(60_000);
+    const burst = [];
+    for (let i = 0; i < 37; i++) {
+      burst.push(add({ title: "Deploy failed", message: "rollout stopped" }));
+      t.ctx.clock.advance(8_000);
+    }
+    const job = t.ctx.db.query<{ id: string }, { p: string }>("SELECT id FROM delivery_jobs WHERE page_id = $p").get({ p: burst[5]!.id })!;
+    t.ctx.db.query("UPDATE delivery_jobs SET status = 'failed' WHERE id = $id").run({ id: job.id });
+    const page = await html();
+    expect(page.match(/>Deploy failed</g)).toHaveLength(1);
+    expect(page).toContain("×37");
+    expect(page).toContain("1 failed");
+    expect(page).toContain(">Calm<");
+  });
+
+  test("timestamps are relative, never raw ISO text, and a page from the future is 'just now'", async () => {
+    const { t, add, html } = await setup();
+    add({ title: "old" });
+    t.ctx.clock.advance(2 * 60 * 60 * 1000);
+    const future = add({ title: "future" });
+    t.ctx.db.query("UPDATE pages SET created_at = created_at + 3600000 WHERE id = $id").run({ id: future.id });
+    const page = await html();
+    expect(page).toContain(">just now</time>");
+    expect(page).toContain(">2 h ago</time>");
+    expect(page).not.toMatch(/>\d{4}-\d\d-\d\dT[^<]*<\/time>/);
+    expect(page).not.toContain("ago</time>-");
+  });
+
+  test("1,000 pages: 20 rows, a total and 'Show 20 more', which grows the list", async () => {
+    const { t, add, html } = await setup();
+    for (let i = 0; i < 1000; i++) {
+      add({ title: `Page ${i}`, message: `body ${i}` });
+      t.ctx.clock.advance(1000);
+    }
+    const first = await html();
+    expect(first.match(/<li><a href=/g)).toHaveLength(20);
+    expect(first).toContain("Showing 20 of 1,000 pages");
+    expect(first).toContain('href="/?show=40"');
+    const second = await html("?show=40");
+    expect(second.match(/<li><a href=/g)).toHaveLength(40);
+    expect(second).toContain('href="/?show=60"');
+  });
+
+  test("hostile show values never break the page or load unbounded rows", async () => {
+    const { t, add, html } = await setup();
+    for (let i = 0; i < 25; i++) {
+      add({ title: `Page ${i}` });
+      t.ctx.clock.advance(1000);
+    }
+    for (const q of ["abc", "-5", "0", "1e9", "99999999999999999999", "20.5", "%00", "40&show=1000000"]) {
+      const page = await html(`?show=${q}`);
+      const rows = page.match(/<li><a href=/g)?.length ?? 0;
+      expect(rows).toBeGreaterThanOrEqual(20);
+      expect(rows).toBeLessThanOrEqual(25);
+    }
+    expect((await html("?show=100000")).match(/<li><a href=/g)).toHaveLength(25);
+  });
+
+  test("no 'Show more' when everything is already shown", async () => {
+    const { add, html } = await setup();
+    add();
+    const page = await html();
+    expect(page).not.toContain("Show 20 more");
+  });
+
+  test("sender text wraps and follows its own direction; a script tag stays text", async () => {
+    const { add, html } = await setup();
+    add({ title: "فشل النشر في بيئة الإنتاج", message: "x".repeat(200) });
+    add({ title: "<script>alert('pwned')</script>", message: "<img src=x onerror=alert(1)>" });
+    const page = await html();
+    expect(page).toContain('<span class="row-title sender" dir="auto">فشل النشر في بيئة الإنتاج</span>');
+    expect(page).toContain(`<span class="row-message sender" dir="auto">${"x".repeat(200)}</span>`);
+    expect(page).not.toContain("<script>alert");
+    expect(page).not.toContain("<img src=x");
+  });
+
+  test("the newest page gets the new-page dot only while it is recent, and no other row ever does", async () => {
+    const { t, add, html } = await setup();
+    add({ title: "a" });
+    add({ title: "b" });
+    expect((await html()).match(/class="dot new"/g)).toHaveLength(1);
+    t.ctx.clock.advance(16 * 60 * 1000);
+    expect(await html()).not.toContain('class="dot new"');
+  });
+
+  test("device status pairs an icon with words and names each platform once", async () => {
+    const { t, account, html } = await setup();
+    seedDevice(t.ctx, account.id);
+    seedDevice(t.ctx, account.id, { platform: "macos", model: "Mac" });
+    seedDevice(t.ctx, account.id);
+    const page = await html();
+    expect(page).toContain("3 devices will ring · iPhone, Mac");
+    expect(page.toLowerCase()).not.toContain("delivered");
+  });
+
+  test("a rate-limited test page says so in words, without an error code", async () => {
+    const { html } = await setup();
+    const page = await html("?limited=1");
+    expect(page).toContain("Too many pages right now. Try again in a minute.");
+    expect(page).not.toContain("429");
   });
 });

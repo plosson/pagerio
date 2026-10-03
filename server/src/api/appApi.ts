@@ -3,14 +3,14 @@ import type { AppDeps } from "../app";
 import { AuthError } from "../auth/google";
 import type { Config } from "../config";
 import { findOrCreateAccount, type Identity } from "../services/accounts";
-import { parseDeviceInput, registerCurrentDevice } from "../services/devices";
-import { createPage, listPagesForAccount, type PageRow, TEST_PAGE_INPUT, viewUrl } from "../services/pages";
+import { listDevices, parseDeviceInput, registerCurrentDevice } from "../services/devices";
+import { countRetainedPages, createPage, type DeliveryCounts, deliveryFor, listPagesForAccount, type PageRow, TEST_PAGE_INPUT, viewUrl } from "../services/pages";
 import { createSession, resolveSession, revokeSession, type SessionRow } from "../services/sessions";
 import { acceptedJson, errorJson, rateLimitedJson } from "./responses";
 
 type Env = { Variables: { session: SessionRow } };
 
-function pageJson(config: Config, page: PageRow) {
+function pageJson(config: Config, page: PageRow, delivery: DeliveryCounts) {
   return {
     id: page.id,
     title: page.title,
@@ -19,6 +19,7 @@ function pageJson(config: Config, page: PageRow) {
     view_url: viewUrl(config, page.public_id),
     source: page.source,
     created_at: new Date(page.created_at).toISOString(),
+    delivery,
   };
 }
 
@@ -71,12 +72,19 @@ export function appApiRoutes(deps: AppDeps): Hono<Env> {
     }
     const result = listPagesForAccount(deps, c.get("session").account_id, { beforeId: c.req.query("before") || null, limit });
     if (!result.ok) return errorJson(c, 400, "invalid_input", result.message);
-    return c.json({ pages: result.pages.map((page) => pageJson(deps.config, page)), next_before: result.nextBefore });
+    const accountId = c.get("session").account_id;
+    const delivery = deliveryFor(deps, result.pages);
+    return c.json({
+      pages: result.pages.map((page) => pageJson(deps.config, page, delivery.get(page.id)!)),
+      next_before: result.nextBefore,
+      total: countRetainedPages(deps, accountId),
+      devices: listDevices(deps, accountId).length,
+    });
   });
 
   api.post("/test", (c) => {
     const result = createPage(deps, { accountId: c.get("session").account_id, input: TEST_PAGE_INPUT, source: "test", idempotencyKey: null });
-    if (!result.ok) return rateLimitedJson(c, result.retryAfterSeconds, "Too many pages. Try again later.");
+    if (!result.ok) return rateLimitedJson(c, result.retryAfterSeconds, "Too many pages right now. Try again in a minute.");
     deps.worker.wake();
     return acceptedJson(c, deps.config, result.page);
   });

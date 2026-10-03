@@ -107,3 +107,20 @@ export function oldestOverdueJobAt(db: Database, now: number): number | null {
 export function releaseJob(db: Database, id: string, at: number): void {
   db.query("UPDATE delivery_jobs SET status = 'pending', next_attempt_at = $at + 5000, updated_at = $at WHERE id = $id AND status = 'sending'").run({ id, at });
 }
+
+export type DeliveryCounts = { sent: number; sending: number; failed: number };
+
+/** Per page: how many device jobs APNs accepted, are still queued or in flight, and gave up. */
+export function deliveryCountsForPages(db: Database, pageIds: string[]): Map<string, DeliveryCounts> {
+  const rows = db
+    .query<DeliveryCounts & { page_id: string }, { ids: string }>(
+      `SELECT page_id,
+              SUM(status = 'submitted') AS sent,
+              SUM(status IN ('pending', 'sending')) AS sending,
+              SUM(status = 'failed') AS failed
+       FROM delivery_jobs WHERE page_id IN (SELECT value FROM json_each($ids))
+       GROUP BY page_id`,
+    )
+    .all({ ids: JSON.stringify(pageIds) });
+  return new Map(rows.map(({ page_id, ...counts }) => [page_id, counts]));
+}

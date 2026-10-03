@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_MESSAGE, parseTriggerBody } from "../../src/services/pageInput";
+import { capCombiningMarks, DEFAULT_MESSAGE, parseTriggerBody } from "../../src/services/pageInput";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const json = (v: unknown) => parseTriggerBody("application/json", enc(JSON.stringify(v)));
@@ -96,5 +96,44 @@ describe("JSON bodies", () => {
 
   test("an empty body with a JSON content type is the default page", () => {
     expect(parseTriggerBody("application/json", new Uint8Array())).toEqual({ ok: true, value: { ...empty, message: DEFAULT_MESSAGE } });
+  });
+});
+
+describe("combining marks", () => {
+  const zalgo = "Z" + "́̂̃̄̅̆".repeat(20) + "algo";
+
+  test("Zalgo text keeps at most two marks per base character", () => {
+    const capped = capCombiningMarks(zalgo);
+    expect(capped).toBe("Ź̂algo");
+    expect([...capped].filter((c) => /\p{M}/u.test(c))).toHaveLength(2);
+  });
+
+  test("marks with no base character at the start are capped too", () => {
+    expect(capCombiningMarks("́́́́x")).toBe("́́x");
+  });
+
+  test("legitimate text survives unchanged: accents, Vietnamese, Arabic, emoji, keycaps, flags and ZWJ", () => {
+    for (const text of ["Café déjà vu", "Tiếng Việt", "فشل النشر", "1️⃣", "👨‍👩‍👧 🇧🇪 👍🏽 ❤️", "é"]) {
+      expect(capCombiningMarks(text)).toBe(text);
+    }
+  });
+
+  test("plain bodies, titles, messages and details are capped at ingest", () => {
+    const plain = parseTriggerBody("text/plain", enc(zalgo));
+    expect(plain.ok && plain.value.message).toBe("Ź̂algo");
+    const parsed = json({ title: zalgo, message: zalgo, details: zalgo });
+    expect(parsed.ok && [parsed.value.title, parsed.value.message, parsed.value.details]).toEqual(Array(3).fill("Ź̂algo"));
+  });
+
+  test("a Zalgo title longer than the limit before capping is accepted once capped", () => {
+    const long = "a" + "́".repeat(500);
+    const parsed = json({ title: long });
+    expect(parsed.ok && parsed.value.title).toBe("á́");
+  });
+
+  test("URLs and group keys are never rewritten", () => {
+    const parsed = json({ url: "https://example.com/é́́", group: "ǵ́́" });
+    expect(parsed.ok && parsed.value.url).toBe(new URL("https://example.com/é́́").href);
+    expect(parsed.ok && parsed.value.group).toBe("ǵ́́");
   });
 });

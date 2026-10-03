@@ -2,7 +2,7 @@ import { isShortTokenShaped, newId, randomShortToken } from "../auth/tokens";
 import type { Config } from "../config";
 import type { Ctx } from "../context";
 import { listDevicesForAccount } from "../db/devices";
-import { insertJob } from "../db/jobs";
+import { type DeliveryCounts, deliveryCountsForPages, insertJob } from "../db/jobs";
 import {
   countPagesSince,
   findRecentPageByIdempotencyKey,
@@ -16,7 +16,7 @@ import {
 } from "../db/pages";
 import type { PageInput } from "./pageInput";
 
-export type { PageRow, PageSource };
+export type { DeliveryCounts, PageRow, PageSource };
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
@@ -24,8 +24,8 @@ const IDEMPOTENCY_WINDOW_MS = DAY_MS;
 export const PAGE_RETENTION_MS = 30 * DAY_MS;
 
 export const TEST_PAGE_INPUT: PageInput = {
-  title: "Pocket Pager",
-  message: "This is a test page. Your pager works.",
+  title: "Test page",
+  message: "Your pager works.",
   details: null,
   url: null,
   group: null,
@@ -115,4 +115,15 @@ export function findPublicPage(ctx: Ctx, publicId: string): PageRow | null {
   const page = getPageByPublicId(ctx.db, publicId);
   if (!page || page.created_at <= ctx.now() - PAGE_RETENTION_MS) return null;
   return page;
+}
+
+/** Every page in the list gets counts; a page created with no devices has all zeros. */
+export function deliveryFor(ctx: Ctx, pages: PageRow[]): Map<string, DeliveryCounts> {
+  const found = deliveryCountsForPages(ctx.db, pages.map((page) => page.id));
+  return new Map(pages.map((page) => [page.id, found.get(page.id) ?? { sent: 0, sending: 0, failed: 0 }]));
+}
+
+/** How many pages the account still has (30 days of retention). */
+export function countRetainedPages(ctx: Ctx, accountId: string): number {
+  return countPagesSince(ctx.db, accountId, ctx.now() - PAGE_RETENTION_MS);
 }

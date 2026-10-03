@@ -144,6 +144,7 @@ describe("createPage", () => {
 
   test("TEST_PAGE_INPUT is a complete, valid input", () => {
     expect(TEST_PAGE_INPUT.message).not.toBe(DEFAULT_MESSAGE);
-    expect(TEST_PAGE_INPUT.title).toBe("Pocket Pager");
+    expect(TEST_PAGE_INPUT.title).toBe("Test page");
+    expect(TEST_PAGE_INPUT.message).toBe("Your pager works.");
   });
 });

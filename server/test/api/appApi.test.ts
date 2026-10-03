@@ -4,7 +4,8 @@ import { listDevicesForAccount } from "../../src/db/devices";
 import { getAccountByGoogleSub } from "../../src/db/accounts";
 import { createSession } from "../../src/services/sessions";
 import { createPage } from "../../src/services/pages";
-import { seedAccount, testApp, testConfig } from "../helpers";
+import { markFailed, markSubmitted } from "../../src/db/jobs";
+import { seedAccount, seedDevice, testApp, testConfig } from "../helpers";
 
 const TOKEN = "c3".repeat(32);
 
@@ -126,6 +127,7 @@ describe("GET /api/pages", () => {
       view_url: `https://pager.test/v/${newest.public_id}`,
       source: "trigger",
       created_at: new Date(newest.created_at).toISOString(),
+      delivery: { sent: 0, sending: 0, failed: 0 },
     });
     expect(body.next_before).toBeNull();
   });
@@ -171,6 +173,62 @@ describe("GET /api/pages", () => {
   });
 });
 
+describe("GET /api/pages delivery, total and devices", () => {
+  type Body = { pages: Array<{ id: string; delivery: { sent: number; sending: number; failed: number } }>; total: number; devices: number };
+  const jobsOf = (t: ReturnType<typeof testApp>, pageId: string) =>
+    t.ctx.db.query<{ id: string }, { pageId: string }>("SELECT id FROM delivery_jobs WHERE page_id = $pageId ORDER BY id").all({ pageId }).map((r) => r.id);
+
+  test("each page reports its own sent, sending and failed counts, never 'delivered'", async () => {
+    const t = testApp();
+    const token = await signIn(t.app);
+    const account = getAccountByGoogleSub(t.ctx.db, "sub-1")!;
+    seedDevice(t.ctx, account.id);
+    seedDevice(t.ctx, account.id, { platform: "macos", model: "Mac" });
+    const mixed = addPage(t, account.id, "mixed");
+    const jobs = jobsOf(t, mixed.id);
+    expect(jobs).toHaveLength(2);
+    const [a, b] = jobs;
+    t.ctx.db.query("UPDATE delivery_jobs SET status = 'sending' WHERE id IN ($a, $b)").run({ a: a!, b: b! });
+    markSubmitted(t.ctx.db, a!, "apns-1", t.ctx.now());
+    markFailed(t.ctx.db, b!, "BadDeviceToken", t.ctx.now());
+    t.ctx.clock.advance(1000);
+    const pending = addPage(t, account.id, "pending");
+    const body = (await (await t.app.request("/api/pages", authed(token))).json()) as Body;
+    const byId = new Map(body.pages.map((p) => [p.id, p.delivery]));
+    expect(byId.get(mixed.id)).toEqual({ sent: 1, sending: 0, failed: 1 });
+    expect(byId.get(pending.id)).toEqual({ sent: 0, sending: 2, failed: 0 });
+    expect(JSON.stringify(body)).not.toContain("delivered");
+    expect(body.devices).toBe(2);
+  });
+
+  test("a page sent before any device existed reports zero everywhere, not 'sending'", async () => {
+    const t = testApp();
+    const token = await signIn(t.app);
+    const account = getAccountByGoogleSub(t.ctx.db, "sub-1")!;
+    addPage(t, account.id, "lonely");
+    seedDevice(t.ctx, account.id);
+    const body = (await (await t.app.request("/api/pages", authed(token))).json()) as Body;
+    expect(body.pages[0]!.delivery).toEqual({ sent: 0, sending: 0, failed: 0 });
+    expect(body.devices).toBe(1);
+  });
+
+  test("total and devices count only the caller's account and only retained pages", async () => {
+    const t = testApp({ config: testConfig({ limits: { pagesPerMinute: 1000, pagesPerDay: 1000, triggerRequestsPerIpPerMinute: 30 } }) });
+    const token = await signIn(t.app);
+    const account = getAccountByGoogleSub(t.ctx.db, "sub-1")!;
+    const other = seedAccount(t.ctx, "other");
+    seedDevice(t.ctx, other.account.id);
+    for (let i = 0; i < 5; i++) addPage(t, other.account.id, `theirs ${i}`);
+    addPage(t, account.id, "expired");
+    t.ctx.clock.advance(30 * 24 * 60 * 60 * 1000 + 1);
+    for (let i = 0; i < 60; i++) addPage(t, account.id, `mine ${i}`);
+    const body = (await (await t.app.request("/api/pages?limit=10", authed(token))).json()) as Body;
+    expect(body.pages).toHaveLength(10);
+    expect(body.total).toBe(60);
+    expect(body.devices).toBe(0);
+  });
+});
+
 describe("POST /api/test", () => {
   test("creates a test page, wakes the worker and respects the rate limit", async () => {
     const t = testApp();
@@ -182,5 +240,6 @@ describe("POST /api/test", () => {
     const limited = await t.app.request("/api/test", authed(token, { method: "POST" }));
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).not.toBeNull();
+    expect(((await limited.json()) as { error: { message: string } }).error.message).toBe("Too many pages right now. Try again in a minute.");
   });
 });

@@ -24,11 +24,31 @@ type Field = { ok: true; value: string | null } | { ok: false; message: string }
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const codePoints = (s: string) => [...s].length;
 
-function textField(source: Record<string, unknown>, name: keyof typeof LIMITS, trim: boolean): Field {
+export const MAX_COMBINING_MARKS = 2;
+const COMBINING_MARK = /^\p{M}$/u;
+
+/** Keeps at most two combining marks per base character, so "Zalgo" text can't bleed over neighbouring lines. */
+export function capCombiningMarks(text: string): string {
+  let run = 0;
+  let out = "";
+  for (const ch of text) {
+    if (COMBINING_MARK.test(ch)) {
+      run += 1;
+      if (run > MAX_COMBINING_MARKS) continue;
+    } else {
+      run = 0;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function textField(source: Record<string, unknown>, name: keyof typeof LIMITS, trim: boolean, capMarks = false): Field {
   const raw = source[name];
   if (raw === undefined || raw === null) return { ok: true, value: null };
   if (typeof raw !== "string") return { ok: false, message: `${name} must be a string.` };
-  const value = trim ? raw.trim() : raw;
+  const trimmed = trim ? raw.trim() : raw;
+  const value = capMarks ? capCombiningMarks(trimmed) : trimmed;
   if (codePoints(value) > LIMITS[name]) return { ok: false, message: `${name} must be at most ${LIMITS[name]} characters.` };
   return { ok: true, value: value === "" ? null : value };
 }
@@ -57,7 +77,7 @@ export function parseTriggerBody(contentType: string | undefined, body: Uint8Arr
 
   const isJson = (contentType ?? "").split(";")[0]!.trim().toLowerCase() === "application/json";
   if (!isJson) {
-    const message = text.trim();
+    const message = capCombiningMarks(text.trim());
     if (codePoints(message) > LIMITS.message) return { ok: false, message: `message must be at most ${LIMITS.message} characters.` };
     return { ok: true, value: { title: null, message: message || DEFAULT_MESSAGE, details: null, url: null, group: null } };
   }
@@ -73,11 +93,11 @@ export function parseTriggerBody(contentType: string | undefined, body: Uint8Arr
   if (typeof data !== "object" || data === null || Array.isArray(data)) return { ok: false, message: "JSON body must be an object." };
   const source = data as Record<string, unknown>;
 
-  const title = textField(source, "title", true);
+  const title = textField(source, "title", true, true);
   if (!title.ok) return title;
-  const message = textField(source, "message", true);
+  const message = textField(source, "message", true, true);
   if (!message.ok) return message;
-  const details = textField(source, "details", false);
+  const details = textField(source, "details", false, true);
   if (!details.ok) return details;
   const group = textField(source, "group", true);
   if (!group.ok) return group;
