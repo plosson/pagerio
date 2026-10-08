@@ -46,15 +46,17 @@ fi
 
 # --- Mac app: archive, export with Developer ID, notarize, and package as a pkg and a zip.
 
-# Notarizes a zip, dmg or pkg. asc exits 0 whatever Apple decides, so ask for the final status
-# and stop unless it is Accepted.
+# Notarizes a zip, dmg or pkg, and stops with Apple's list of issues unless it is Accepted.
+# asc exits non-zero when Apple refuses the file, so its output is read before its exit code.
 notarize() {
-  local id status
-  id="$(asc notarization submit --file "$1" --wait | jq -r '.data.id // .id')"
+  local out id status
+  out="$(asc notarization submit --file "$1" --wait)" || true
+  id="$(jq -r '.data.id // .id // empty' <<<"$out" 2>/dev/null || true)"
+  [[ -n "$id" ]] || { echo "$out" >&2; echo "✗ notarization was not accepted; version files left modified" >&2; exit 1; }
   status="$(asc notarization status --id "$id" | jq -r '.data.attributes.status')"
   echo "Notarization of $(basename "$1") ($id): $status"
   if [[ "$status" != "Accepted" ]]; then
-    asc notarization log --id "$id" >&2 || true
+    curl -fsS "$(asc notarization log --id "$id" | jq -r '.data.attributes.developerLogUrl')" | jq '.issues' >&2 || true
     echo "✗ notarization was not accepted; version files left modified" >&2; exit 1
   fi
 }
