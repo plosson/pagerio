@@ -77,8 +77,8 @@ export function loadApnsConfig(env: Env = process.env): ApnsConfig {
     keyId: required(env, "APNS_KEY_ID"),
     teamId: required(env, "APNS_TEAM_ID"),
     topics: {
-      ios: env.APNS_TOPIC_IOS?.trim() || "com.chuut.pagerio",
-      macos: env.APNS_TOPIC_MACOS?.trim() || "com.chuut.pagerio.mac",
+      ios: env.APNS_TOPIC_IOS?.trim() || "com.houlahop.pagerio",
+      macos: env.APNS_TOPIC_MACOS?.trim() || "com.houlahop.pagerio.mac",
     },
   };
 }

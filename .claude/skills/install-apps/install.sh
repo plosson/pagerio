@@ -36,7 +36,7 @@ install_mac() {
   local source="$DERIVED/Build/Products/Debug/Pocket Pager.app"
   local target="/Applications/Pocket Pager.app"
   echo "→ Replacing $target"
-  osascript -e 'quit app id "com.chuut.pagerio.mac"' >/dev/null 2>&1 || true
+  osascript -e 'quit app id "com.houlahop.pagerio.mac"' >/dev/null 2>&1 || true
   sleep 1
   pkill -f "Pocket Pager.app/Contents/MacOS/Pocket Pager" 2>/dev/null || true
   rm -rf "$target"
@@ -93,7 +93,7 @@ install_ios() {
     fi
     sleep 3
   done
-  if xcrun devicectl device process launch --terminate-existing --device "$identifier" com.chuut.pagerio >/dev/null 2>&1; then
+  if xcrun devicectl device process launch --terminate-existing --device "$identifier" com.houlahop.pagerio >/dev/null 2>&1; then
     echo "✓ iPhone app installed and launched"
   else
     echo "✓ iPhone app installed (not launched: unlock the iPhone and open Pocket Pager)"

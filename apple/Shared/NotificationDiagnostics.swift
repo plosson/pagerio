@@ -8,7 +8,7 @@ import UserNotifications
 @MainActor enum NotificationDiagnostics {
     static func runIfRequested(services: AppServices) async {
         guard ProcessInfo.processInfo.arguments.contains("--notification-diagnostics") else { return }
-        let logger = Logger(subsystem: "com.chuut.pagerio", category: "NotificationDiagnostics")
+        let logger = Logger(subsystem: "com.houlahop.pagerio", category: "NotificationDiagnostics")
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         logger.notice("Settings: authorization=\(settings.authorizationStatus.rawValue) alerts=\(settings.alertSetting.rawValue) style=\(settings.alertStyle.rawValue) sound=\(settings.soundSetting.rawValue); signedIn=\(services.session.isSignedIn)")

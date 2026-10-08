@@ -59,6 +59,6 @@ build's log path is printed at the start.
 |---|---|
 | `No paired iPhone found` | Plug the iPhone in by USB, unlock it, tap **Trust**. |
 | Install fails, "device disconnected", "locked" | Unlock the iPhone and run `install.sh ios` again. |
-| `No profiles for 'com.chuut.pagerio…'` | Xcode isn't signed into the team. Add the account in Xcode › Settings › Accounts and retry. |
+| `No profiles for 'com.houlahop.pagerio…'` | Xcode isn't signed into the team. Add the account in Xcode › Settings › Accounts and retry. |
 | App won't open, "integrity could not be verified" | The development profile expired (it lasts one year). Run `install.sh` to rebuild. |
 | Build error | Read the log path the script printed. `cd apple/PagerKit && swift test` checks the shared package on its own. |

@@ -24,7 +24,7 @@ describe("loadConfig", () => {
     expect(config.port).toBe(3000);
     expect(config.databasePath).toBe("/data/pagerio.db");
     expect(config.tokenEncKey.length).toBe(32);
-    expect(config.apns.topics).toEqual({ ios: "com.chuut.pagerio", macos: "com.chuut.pagerio.mac" });
+    expect(config.apns.topics).toEqual({ ios: "com.houlahop.pagerio", macos: "com.houlahop.pagerio.mac" });
     expect(config.limits).toEqual({ pagesPerMinute: 10, pagesPerDay: 100, triggerRequestsPerIpPerMinute: 30 });
   });
 

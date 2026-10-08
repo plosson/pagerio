@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
     let services = AppServices(
         baseURL: AppServices.baseURL(),
         environment: .current,
-        store: KeychainStore(service: "com.chuut.pagerio"),
+        store: KeychainStore(service: "com.houlahop.pagerio"),
         requestRemoteNotifications: { UIApplication.shared.registerForRemoteNotifications() }
     )
 

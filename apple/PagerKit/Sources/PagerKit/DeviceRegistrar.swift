@@ -12,7 +12,7 @@ public final class DeviceRegistrar {
     public private(set) var isRegistered = false
     private var isRegistering = false
     private var registrationPending = false
-    private let logger = Logger(subsystem: "com.chuut.pagerio", category: "PushRegistration")
+    private let logger = Logger(subsystem: "com.houlahop.pagerio", category: "PushRegistration")
 
     public func didFailToReceiveToken(_ error: any Error) {
         isRegistered = false
