@@ -5,7 +5,7 @@ GOOGLE_CLIENT_ID_IOS = 931954287794-gcf7ob8rs8lhs17jnfijo2riagj8otf5.apps.google
 GOOGLE_REVERSED_CLIENT_ID_IOS = com.googleusercontent.apps.931954287794-gcf7ob8rs8lhs17jnfijo2riagj8otf5
 GOOGLE_CLIENT_ID_MACOS = 931954287794-ic9vsp6ur3avk1asjnqfmee12mmpe4no.apps.googleusercontent.com
 GOOGLE_REVERSED_CLIENT_ID_MACOS = com.googleusercontent.apps.931954287794-ic9vsp6ur3avk1asjnqfmee12mmpe4no
-// development = APNs sandbox; matches the aps-environment entitlement
+// development = APNs sandbox; matches the aps-environment entitlement. The Mac target uses production for Release builds (see project.yml).
 APS_ENVIRONMENT = development
 // Optional per-machine overrides, git-ignored.
 #include? "Local.xcconfig"

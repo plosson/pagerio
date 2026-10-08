@@ -73,7 +73,6 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         PagerioAPIBaseURL: $(PAGERIO_API_BASE_URL)
-        PagerioApsEnvironment: $(APS_ENVIRONMENT)
         GIDClientID: $(GOOGLE_CLIENT_ID_MACOS)
         CFBundleURLTypes:
           - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID_MACOS)]
@@ -94,3 +93,9 @@ targets:
         PRODUCT_NAME: Pocket Pager
         ASSETCATALOG_COMPILER_APPICON_NAME: PagerIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        # The APNs sandbox treats Macs as offline and holds pages back for minutes or hours, so Mac release builds use production.
+        # Only a Developer ID export is signed for production: Xcode builds use Apple Development, whose profile only allows the sandbox.
+        # The app reads its signed entitlement at launch, so it always reports the environment it really has.
+        Release:
+          APS_ENVIRONMENT: production
