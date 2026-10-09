@@ -128,6 +128,13 @@ details { margin: var(--s3) 0; }
 summary { color: var(--link); font-weight: 600; font-size: 1.125rem; cursor: pointer; min-height: var(--tap); display: flex; align-items: center; }
 details pre { background: var(--code-bg); border-radius: var(--radius-small); padding: 12px var(--s2); margin: var(--s1) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Devices */
+.devices { list-style: none; padding: 0; margin: var(--s1) 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.devices li { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: 10px var(--s2); }
+.devices li + li { border-top: 1px solid var(--line); }
+.devices li > span { min-width: 0; overflow-wrap: anywhere; }
+.devices form { margin: 0; flex-shrink: 0; }
+
 /* Recent pages */
 .pages { list-style: none; padding: 0; margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .pages li + li { border-top: 1px solid var(--line); }

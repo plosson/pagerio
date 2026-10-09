@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { AppDeps } from "../app";
 import { getAccount, triggerUrl } from "../services/accounts";
-import { listDevices } from "../services/devices";
+import { lastDeliveryByDevice, type LastDelivery } from "../db/jobs";
+import { type DeviceRow, listDevices, removeDevice } from "../services/devices";
 import { countRetainedPages, createPage, type DeliveryCounts, deliveryFor, listPagesForAccount, type PageRow, TEST_PAGE_INPUT, viewUrl } from "../services/pages";
 import { renderHtml } from "./http";
 import { asset, Brand, Layout, MessagePage } from "./layout";
@@ -102,11 +103,52 @@ function PageItem(props: { group: PageGroup; href: string; isNew: boolean; now: 
   );
 }
 
+function DeviceList(props: { devices: DeviceRow[]; last: Map<string, LastDelivery>; now: number; csrf: string }) {
+  const failed = (device: DeviceRow) => props.last.get(device.id)?.status === "failed";
+  return (
+    <details id="devices" open={props.devices.some(failed)}>
+      <summary>Manage devices</summary>
+      <ul class="devices">
+        {props.devices.map((device) => {
+          const last = props.last.get(device.id);
+          return (
+            <li>
+              <span>
+                <span class="row-title">
+                  {device.platform === "ios" ? "iPhone" : "Mac"} · {device.model}
+                </span>
+                <span class="row-meta">
+                  <span>Seen {relativeTime(device.last_seen_at, props.now)}</span>
+                  {device.apns_env === "sandbox" && <span>Development build</span>}
+                  {failed(device) && (
+                    <span class="failed">
+                      <span aria-hidden="true">!</span> Last page failed{last?.last_error ? `: ${last.last_error}` : ""}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <form method="post" action="/devices/remove">
+                <input type="hidden" name="_csrf" value={props.csrf} />
+                <input type="hidden" name="device_id" value={device.id} />
+                <button type="submit" class="link">
+                  Remove
+                </button>
+              </form>
+            </li>
+          );
+        })}
+      </ul>
+      <p class="small muted">Removing a device signs its app out. A device that still works can sign in again.</p>
+    </details>
+  );
+}
+
 function Dashboard(props: {
   email: string;
   url: string;
   baseUrl: string;
-  platforms: string[];
+  devices: DeviceRow[];
+  lastDelivery: Map<string, LastDelivery>;
   groups: PageGroup[];
   /** Pages inside the rows shown; a burst row holds several. */
   shown: number;
@@ -154,15 +196,16 @@ function Dashboard(props: {
               </button>
             </form>
           </div>
-          {props.platforms.length === 0 ? (
+          {props.devices.length === 0 ? (
             <p class="status">
               <span aria-hidden="true">○</span> No devices yet. Install Pocket Pager on your iPhone or Mac and sign in with this Google account.
             </p>
           ) : (
             <p class="status">
-              <span aria-hidden="true">✓</span> {devicesLine(props.platforms)}
+              <span aria-hidden="true">✓</span> {devicesLine(props.devices.map((device) => device.platform))}
             </p>
           )}
+          {props.devices.length > 0 && <DeviceList devices={props.devices} last={props.lastDelivery} now={props.now} csrf={props.csrf} />}
           <details id="how">
             <summary>How to send a page</summary>
             <pre>
@@ -216,14 +259,17 @@ export function dashboardRoutes(deps: AppDeps): Hono {
       ? { text: "Test page sent.", problem: false }
       : c.req.query("limited")
         ? { text: "Too many pages right now. Try again in a minute.", problem: true }
-        : null;
+        : c.req.query("removed")
+          ? { text: "Device removed.", problem: false }
+          : null;
     return renderHtml(
       c,
       <Dashboard
         email={account.email}
         url={triggerUrl(deps, account.id)}
         baseUrl={deps.config.publicBaseUrl}
-        platforms={listDevices(deps, account.id).map((device) => device.platform)}
+        devices={listDevices(deps, account.id)}
+        lastDelivery={lastDeliveryByDevice(deps.db, account.id)}
         groups={rows.groups}
         shown={rows.pages}
         total={countRetainedPages(deps, account.id)}
@@ -245,6 +291,17 @@ export function dashboardRoutes(deps: AppDeps): Hono {
     if (!result.ok) return c.redirect("/?limited=1", 303);
     deps.worker.wake();
     return c.redirect("/?sent=1", 303);
+  });
+
+  routes.post("/devices/remove", async (c) => {
+    const web = currentWebSession(deps, c);
+    if (!web) return c.redirect("/", 303);
+    if (!(await hasValidCsrf(c, web))) {
+      return renderHtml(c, <MessagePage title="Form expired" text="This form expired. Go back and try again." />, 403);
+    }
+    const { device_id } = await c.req.parseBody();
+    const removed = typeof device_id === "string" && removeDevice(deps, web.session.account_id, device_id);
+    return c.redirect(removed ? "/?removed=1" : "/", 303);
   });
 
   return routes;

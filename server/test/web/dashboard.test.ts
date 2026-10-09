@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Hono } from "hono";
 import { getAccountByGoogleSub } from "../../src/db/accounts";
 import { triggerUrl } from "../../src/services/accounts";
-import { createPage } from "../../src/services/pages";
+import { createPage, TEST_PAGE_INPUT } from "../../src/services/pages";
 import { createSession } from "../../src/services/sessions";
 import { APP_VERSION } from "../../src/version";
 import { CSP } from "../../src/web/http";
@@ -337,5 +337,78 @@ describe("dashboard layout and stress", () => {
     const page = await html("?limited=1");
     expect(page).toContain("Too many pages right now. Try again in a minute.");
     expect(page).not.toContain("429");
+  });
+});
+
+describe("removing a device", () => {
+  async function setup() {
+    const t = testApp();
+    const { session } = await signIn(t.app);
+    const account = getAccountByGoogleSub(t.ctx.db, "user1")!;
+    const csrf = csrfFrom(await (await home(t.app, session!)).text());
+    const count = () => t.ctx.db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM devices").get()!.n;
+    return { t, session: session!, account, csrf, count };
+  }
+
+  test("each device is listed with its own Remove form, and the last failed page is flagged", async () => {
+    const { t, session, account } = await setup();
+    const dead = seedDevice(t.ctx, account.id, { platform: "macos", model: "Mac14,2" }).device;
+    const alive = seedDevice(t.ctx, account.id).device;
+    const page = createPage(t.ctx, { accountId: account.id, input: TEST_PAGE_INPUT, source: "test", idempotencyKey: null });
+    if (!page.ok) throw new Error("rate limited");
+    t.ctx.db.query("UPDATE delivery_jobs SET status = 'failed', last_error = 'DeviceTokenNotForTopic' WHERE device_id = $d").run({ d: dead.id });
+    const html = await (await home(t.app, session)).text();
+    expect(html).toContain(`name="device_id" value="${dead.id}"`);
+    expect(html).toContain(`name="device_id" value="${alive.id}"`);
+    expect(html).toContain("Mac14,2");
+    expect(html.match(/Last page failed/g)).toHaveLength(1);
+    expect(html).toContain("DeviceTokenNotForTopic");
+  });
+
+  test("removes the device and signs its app out", async () => {
+    const { t, session, account, csrf, count } = await setup();
+    const { device, sessionToken } = seedDevice(t.ctx, account.id);
+    const res = await postForm(t.app, "/devices/remove", session, { _csrf: csrf, device_id: device.id });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/?removed=1");
+    expect(count()).toBe(0);
+    const me = await t.app.request("/api/pages", { headers: { authorization: `Bearer ${sessionToken}` } });
+    expect(me.status).toBe(401);
+    const after = await t.app.request("/?removed=1", { headers: { cookie: `pp_session=${session}` } });
+    expect(await after.text()).toContain("Device removed.");
+  });
+
+  test("never removes another account's device, even with a valid CSRF token", async () => {
+    const { t, session, csrf, count } = await setup();
+    const other = seedAccount(t.ctx, "other");
+    const theirs = seedDevice(t.ctx, other.account.id).device;
+    const res = await postForm(t.app, "/devices/remove", session, { _csrf: csrf, device_id: theirs.id });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/");
+    expect(count()).toBe(1);
+  });
+
+  test("a missing or wrong CSRF token, no session, or a junk id removes nothing", async () => {
+    const { t, session, account, csrf, count } = await setup();
+    const { device } = seedDevice(t.ctx, account.id);
+    expect((await postForm(t.app, "/devices/remove", session, { device_id: device.id })).status).toBe(403);
+    expect((await postForm(t.app, "/devices/remove", session, { _csrf: "wrong", device_id: device.id })).status).toBe(403);
+    expect((await postForm(t.app, "/devices/remove", "not-a-session", { _csrf: csrf, device_id: device.id })).status).toBe(303);
+    for (const junk of ["", "dev_nope", "' OR 1=1 --", "x".repeat(10_000)]) {
+      expect((await postForm(t.app, "/devices/remove", session, { _csrf: csrf, device_id: junk })).headers.get("location")).toBe("/");
+    }
+    expect(count()).toBe(1);
+  });
+
+  test("past pages keep their failure count after the device is removed", async () => {
+    const { t, session, account, csrf } = await setup();
+    const { device } = seedDevice(t.ctx, account.id);
+    const page = createPage(t.ctx, { accountId: account.id, input: TEST_PAGE_INPUT, source: "test", idempotencyKey: null });
+    if (!page.ok) throw new Error("rate limited");
+    t.ctx.db.query("UPDATE delivery_jobs SET status = 'failed' WHERE device_id = $d").run({ d: device.id });
+    await postForm(t.app, "/devices/remove", session, { _csrf: csrf, device_id: device.id });
+    const html = await (await home(t.app, session)).text();
+    expect(html).toContain("1 failed");
+    expect(html).toContain("No devices yet");
   });
 });

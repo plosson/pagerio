@@ -124,3 +124,20 @@ export function deliveryCountsForPages(db: Database, pageIds: string[]): Map<str
     .all({ ids: JSON.stringify(pageIds) });
   return new Map(rows.map(({ page_id, ...counts }) => [page_id, counts]));
 }
+
+export type LastDelivery = { status: JobStatus; last_error: string | null };
+
+/** Per device of the account: the status of its most recent delivery job. */
+export function lastDeliveryByDevice(db: Database, accountId: string): Map<string, LastDelivery> {
+  const rows = db
+    .query<LastDelivery & { device_id: string }, { accountId: string }>(
+      `SELECT j.device_id, j.status, j.last_error
+       FROM devices d
+       JOIN delivery_jobs j ON j.id = (
+         SELECT id FROM delivery_jobs WHERE device_id = d.id ORDER BY updated_at DESC, id DESC LIMIT 1
+       )
+       WHERE d.account_id = $accountId`,
+    )
+    .all({ accountId });
+  return new Map(rows.map(({ device_id, ...last }) => [device_id, last]));
+}

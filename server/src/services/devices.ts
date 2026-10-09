@@ -59,3 +59,11 @@ export function registerCurrentDevice(ctx: Ctx, session: SessionRow, input: Devi
 export function listDevices(ctx: Ctx, accountId: string): DeviceRow[] {
   return listDevicesForAccount(ctx.db, accountId);
 }
+
+/** Removes one of the account's devices; its app session goes with it. False when the account has no such device. */
+export function removeDevice(ctx: Ctx, accountId: string, deviceId: string): boolean {
+  const device = getDevice(ctx.db, deviceId);
+  if (!device || device.account_id !== accountId) return false;
+  deleteDevice(ctx.db, device.id);
+  return true;
+}
