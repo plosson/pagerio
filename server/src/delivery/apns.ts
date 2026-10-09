@@ -77,6 +77,9 @@ export function buildPayload(m: ApnsMessage): string {
   return JSON.stringify(payload);
 }
 
+/** 400 reasons that are about the device token itself. DeviceTokenNotForTopic: the token belongs to another app, such as an old build. */
+const DEAD_TOKEN_REASONS = new Set(["BadDeviceToken", "DeviceTokenNotForTopic"]);
+
 export function classifyResponse(status: number, body: string, apnsId: string | undefined): ApnsResult {
   if (status === 200) return { kind: "ok", apnsId: apnsId ?? "" };
   let reason = `HTTP ${status}`;
@@ -86,7 +89,7 @@ export function classifyResponse(status: number, body: string, apnsId: string | 
   } catch {
     // Non-JSON body: keep the HTTP status as the reason.
   }
-  if (status === 410 || (status === 400 && reason === "BadDeviceToken")) return { kind: "invalid-token", reason };
+  if (status === 410 || (status === 400 && DEAD_TOKEN_REASONS.has(reason))) return { kind: "invalid-token", reason };
   if (status === 429 || status >= 500 || (status === 403 && reason === "ExpiredProviderToken")) return { kind: "retry", reason };
   return { kind: "fail", reason };
 }

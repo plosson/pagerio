@@ -72,13 +72,24 @@ describe("classifyResponse", () => {
   test("200 is ok and keeps the apns-id", () => {
     expect(classifyResponse(200, "", "id-1")).toEqual({ kind: "ok", apnsId: "id-1" });
   });
-  test("410 and BadDeviceToken mean the token is dead", () => {
+  test("410, BadDeviceToken and DeviceTokenNotForTopic mean the token is dead", () => {
     expect(classifyResponse(410, '{"reason":"Unregistered"}', undefined)).toEqual({ kind: "invalid-token", reason: "Unregistered" });
     expect(classifyResponse(400, '{"reason":"BadDeviceToken"}', undefined).kind).toBe("invalid-token");
+    // A token from another app, such as an old build: other devices still get the page with the same topic.
+    expect(classifyResponse(400, '{"reason":"DeviceTokenNotForTopic"}', undefined)).toEqual({ kind: "invalid-token", reason: "DeviceTokenNotForTopic" });
   });
-  test("other 400s are permanent failures, not token deletions", () => {
-    expect(classifyResponse(400, '{"reason":"DeviceTokenNotForTopic"}', undefined)).toEqual({ kind: "fail", reason: "DeviceTokenNotForTopic" });
+  test("server-side problems never delete a device: they would sign out every app at once", () => {
+    for (const reason of ["BadTopic", "MissingTopic", "TopicDisallowed", "BadEnvironmentKeyInToken", "BadCertificateEnvironment", "BadPath", "PayloadEmpty"]) {
+      expect(classifyResponse(400, JSON.stringify({ reason }), undefined)).toEqual({ kind: "fail", reason });
+    }
+    expect(classifyResponse(403, '{"reason":"InvalidProviderToken"}', undefined).kind).toBe("fail");
     expect(classifyResponse(413, '{"reason":"PayloadTooLarge"}', undefined).kind).toBe("fail");
+  });
+  test("a dead-token reason only counts with its own status", () => {
+    expect(classifyResponse(403, '{"reason":"DeviceTokenNotForTopic"}', undefined).kind).toBe("fail");
+    expect(classifyResponse(500, '{"reason":"BadDeviceToken"}', undefined).kind).toBe("retry");
+    expect(classifyResponse(400, '{"reason":"devicetokennotfortopic"}', undefined).kind).toBe("fail");
+    expect(classifyResponse(400, '{"reason":["DeviceTokenNotForTopic"]}', undefined).kind).toBe("fail");
   });
   test("429, 5xx and an expired provider token are retried", () => {
     expect(classifyResponse(429, '{"reason":"TooManyRequests"}', undefined).kind).toBe("retry");
