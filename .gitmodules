@@ -1,0 +1,3 @@
+[submodule "scripts/mac-release"]
+	path = scripts/mac-release
+	url = https://github.com/plosson/houlahop-mac-release.git

@@ -1,3 +1,4 @@
+import HoulahopUpdater
 import PagerKit
 import SwiftUI
 
@@ -7,7 +8,7 @@ struct PocketPagerMacApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuPanel(services: appDelegate.services)
+            MenuPanel(services: appDelegate.services, updater: appDelegate.updater)
         } label: {
             // Template image (22 pt canvas): macOS tints it for light/dark menu bars.
             Image("PagerMenu")

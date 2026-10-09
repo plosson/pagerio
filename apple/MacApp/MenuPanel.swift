@@ -1,10 +1,12 @@
 import AppKit
 import GoogleSignIn
+import HoulahopUpdater
 import PagerKit
 import SwiftUI
 
 struct MenuPanel: View {
     let services: AppServices
+    let updater: Updater
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openURL) private var openURL
     @State private var loginItemRefresh = 0
@@ -169,6 +171,8 @@ struct MenuPanel: View {
             }
             HStack {
                 Text("Version \(AppVersion.full)")
+                CheckForUpdatesButton(updater: updater)
+                    .buttonStyle(.plain)
                 Spacer()
                 Button("Notification settings…") {
                     Task {

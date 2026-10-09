@@ -37,5 +37,13 @@
 	<true/>
 	<key>PagerioAPIBaseURL</key>
 	<string>$(PAGERIO_API_BASE_URL)</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/plosson/pagerio/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>dabwyVo5evcJjXBoaCQtB6VFuuAHbfrYdzWrG80QMSQ=</string>
 </dict>
 </plist>

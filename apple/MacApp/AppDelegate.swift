@@ -1,5 +1,6 @@
 import AppKit
 import GoogleSignIn
+import HoulahopUpdater
 import PagerKit
 import UserNotifications
 
@@ -11,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         store: KeychainStore(service: "com.houlahop.pagerio.mac"),
         requestRemoteNotifications: { NSApplication.shared.registerForRemoteNotifications() }
     )
+    let updater = Updater()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let center = UNUserNotificationCenter.current()

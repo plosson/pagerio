@@ -20,6 +20,8 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     majorVersion: 9.0.0
+  HoulahopUpdater:
+    path: ../scripts/mac-release
 targets:
   PocketPager-iOS:
     type: application
@@ -65,6 +67,7 @@ targets:
     dependencies:
       - package: PagerKit
       - package: GoogleSignIn
+      - package: HoulahopUpdater
     info:
       path: MacApp/Info.plist
       properties:
@@ -77,6 +80,12 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID_MACOS)]
         ITSAppUsesNonExemptEncryption: false
+        # Sparkle: scripts/release.sh uploads appcast.xml to each GitHub release, so "latest" always points to the newest one.
+        SUFeedURL: https://github.com/plosson/pagerio/releases/latest/download/appcast.xml
+        SUPublicEDKey: dabwyVo5evcJjXBoaCQtB6VFuuAHbfrYdzWrG80QMSQ=
+        SUEnableAutomaticChecks: true
+        # The app is sandboxed: Sparkle installs updates through its XPC installer service.
+        SUEnableInstallerLauncherService: true
     entitlements:
       path: MacApp/PocketPager-macOS.entitlements
       properties:
@@ -84,6 +93,10 @@ targets:
         com.apple.developer.usernotifications.time-sensitive: true
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        # Lets the sandboxed app reach Sparkle's installer (SUEnableInstallerLauncherService).
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
         keychain-access-groups:
           - $(AppIdentifierPrefix)com.houlahop.pagerio.mac
           - $(AppIdentifierPrefix)com.google.GIDSignIn

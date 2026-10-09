@@ -6,10 +6,11 @@ enum AppVersion {
         "v" + marketing
     }
 
-    /// "0.1.0 (1)": the version and the build, for the footer.
+    /// "0.1.0 (1)": the version and the build, for the footer. Mac releases use the version as the build (Sparkle
+    /// compares builds), so it shows once: "0.1.0".
     static var full: String {
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-        return "\(marketing) (\(build))"
+        return build == marketing ? marketing : "\(marketing) (\(build))"
     }
 
     private static var marketing: String {
